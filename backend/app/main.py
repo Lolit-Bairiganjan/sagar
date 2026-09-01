@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routes.suspects import router as suspects_router
 
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -10,9 +10,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(suspects_router)
+
+
 @app.get("/")
 def root():
     return {"status": "ok"}
+
 
 @app.get("/api/spills")
 def get_spills():
