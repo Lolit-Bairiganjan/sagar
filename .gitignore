@@ -30,7 +30,7 @@ frontend/.env
 ai-model/.env
 
 # ---------- AI/ML specific (ai-model/) ----------
-# Model weights & checkpoints (too large for git — share via Drive/GDrive link instead)
+# Model weights & checkpoints (too large for git — use shared Drive link)
 *.pt
 *.pth
 *.h5
@@ -45,9 +45,22 @@ checkpoints/
 *.tiff
 *.jp2
 *.SAFE/
-data/raw/
-data/interim/
+*.npy
 ai-model/data/
+
+# Training outputs (can be GBs — regenerate from weights)
+ai-model/outputs/
+
+# Dev 1 generated tiles (regenerated from pipeline)
+dev1_pipeline/tiles/
+
+# Jupyter notebook artifacts
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# ai-model virtual environment
+ai-model/.venv/
+ai-model/venv/
 
 # Keep clean output GeoJSON if small & needed for demo — otherwise ignore large ones
 # *.geojson
