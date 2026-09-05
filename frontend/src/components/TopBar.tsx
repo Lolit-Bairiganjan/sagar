@@ -17,12 +17,14 @@ import {
   Lock,
   Mail,
   CheckCircle2,
+  ArrowLeft,
 } from 'lucide-react';
 import type { Investigation, SystemStatus } from '../types';
 
 interface TopBarProps {
   investigation: Investigation | null;
   systemStatus: SystemStatus | null;
+  onBackToLanding?: () => void;
 }
 
 function useIndianClock() {
@@ -248,7 +250,11 @@ function LoginModal({
   );
 }
 
-export default function TopBar({ investigation, systemStatus }: TopBarProps) {
+export default function TopBar({
+  investigation,
+  systemStatus,
+  onBackToLanding,
+}: TopBarProps) {
   const indianTime = useIndianClock();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -289,6 +295,15 @@ export default function TopBar({ investigation, systemStatus }: TopBarProps) {
             System Online
           </span>
         </div>
+        {onBackToLanding && (
+          <button
+            onClick={onBackToLanding}
+            className="ml-3 hidden sm:flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-mono text-xs font-semibold text-cyan-300 transition-all hover:bg-cyan-500/20 hover:border-cyan-400 cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.2)] active:scale-95"
+          >
+            <ArrowLeft size={13} />
+            <span>MISSION HUB</span>
+          </button>
+        )}
       </div>
 
       {/* Center: operation */}

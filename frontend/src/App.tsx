@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar';
 import IntelligencePanel from './components/IntelligencePanel';
 import BottomTimeline from './components/BottomTimeline';
 import StartupScreen from './components/StartupScreen';
+import LandingPage from './components/LandingPage';
 import AmbientBackground from './components/AmbientBackground';
 import SectionTransition from './components/SectionTransition';
 import {
@@ -149,8 +150,10 @@ export default function App() {
     setCenterTargetVessel(null);
   }, []);
 
-  if (!booted) {
-    return <StartupScreen onComplete={() => setBooted(true)} />;
+  const [viewMode, setViewMode] = useState<'landing' | 'console'>('landing');
+
+  if (viewMode === 'landing') {
+    return <LandingPage onEnter={() => setViewMode('console')} />;
   }
 
   return (
@@ -158,7 +161,11 @@ export default function App() {
       <AmbientBackground />
 
       <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col">
-        <TopBar investigation={investigation} systemStatus={systemStatus} />
+        <TopBar
+          investigation={investigation}
+          systemStatus={systemStatus}
+          onBackToLanding={() => setViewMode('landing')}
+        />
         {error && <ErrorBanner message={error} />}
 
         <div className="flex min-h-0 flex-1">

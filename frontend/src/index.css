@@ -16,28 +16,28 @@
   }
 
   html {
-    /* Slightly larger base size so all rem-based text (text-xs, text-sm, etc.)
-       reads a bit bigger across the whole app. */
+    /* Base text size and natural smooth scrolling */
     font-size: 18px;
+    scroll-behavior: smooth;
   }
 
   html,
   body,
   #root {
-    height: 100%;
+    min-height: 100%;
     margin: 0;
-    background-color: #05080d;
+    background-color: #14161B;
   }
 
   body {
     @apply bg-bg-primary text-text-primary antialiased;
-    font-family: 'Valley Sans', ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Valley Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
   ::selection {
-    background: rgba(63, 217, 232, 0.25);
-    color: #e6edf5;
+    background: rgba(255, 102, 0, 0.3);
+    color: #ffffff;
   }
 
   /* Thin technical scrollbars */
@@ -70,7 +70,7 @@
     @apply bg-bg-panel border border-border shadow-panel;
   }
 
-  /* ---- Glassmorphism ---- */
+  /* ---- Dark Glassmorphism (Console) ---- */
   .glass {
     background: linear-gradient(180deg, rgba(13, 19, 28, 0.62) 0%, rgba(10, 15, 23, 0.52) 100%);
     backdrop-filter: blur(20px) saturate(140%);
@@ -105,6 +105,115 @@
     backdrop-filter: blur(18px) saturate(150%);
     -webkit-backdrop-filter: blur(18px) saturate(150%);
     border: 1px solid rgba(63, 217, 232, 0.28);
+  }
+
+  /* ---- Lenis Smooth Scroll Engine Styles ---- */
+  html.lenis, html.lenis body {
+    height: auto;
+  }
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+  .lenis.lenis-stopped {
+    overflow: hidden;
+  }
+  .lenis.lenis-smooth iframe {
+    pointer-events: none;
+  }
+
+  /* ---- ChainGPT CAD Grid & Glass Specimen Utilities ---- */
+  .chaingpt-grid {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .chaingpt-dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Smokestack Billowing Exhaust Animation */
+  @keyframes smokeBillow {
+    0% {
+      transform: translate(0, 0) scale(0.6);
+      opacity: 0.85;
+    }
+    50% {
+      transform: translate(-14px, -18px) scale(1.15);
+      opacity: 0.55;
+    }
+    100% {
+      transform: translate(-34px, -40px) scale(1.75);
+      opacity: 0;
+    }
+  }
+
+  .animate-smoke-1 {
+    animation: smokeBillow 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+  .animate-smoke-2 {
+    animation: smokeBillow 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite 1.05s;
+  }
+  .animate-smoke-3 {
+    animation: smokeBillow 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite 2.1s;
+  }
+
+  .glass-specimen {
+    background: linear-gradient(180deg, rgba(30, 34, 43, 0.75) 0%, rgba(20, 23, 29, 0.85) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 12px 36px -8px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-specimen-hover {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .glass-specimen-hover:hover {
+    border-color: rgba(255, 102, 0, 0.4);
+    box-shadow:
+      0 0 0 1px rgba(255, 102, 0, 0.25),
+      0 16px 40px -8px rgba(0, 0, 0, 0.7),
+      0 0 20px -4px rgba(255, 102, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  /* Aquarium Cylinder Glass Reflection */
+  .aquarium-glass {
+    background: linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.03) 25%,
+      rgba(20, 30, 45, 0.35) 50%,
+      rgba(255, 255, 255, 0.04) 75%,
+      rgba(255, 255, 255, 0.15) 100%
+    );
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow:
+      inset 4px 0 16px rgba(255, 255, 255, 0.15),
+      inset -4px 0 16px rgba(255, 255, 255, 0.15),
+      inset 0 0 30px rgba(0, 160, 255, 0.08),
+      0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Checkered flag decal band (as seen in ChainGPT incubator) */
+  .checkered-band {
+    background-image:
+      linear-gradient(45deg, rgba(200, 205, 215, 0.7) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(200, 205, 215, 0.7) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(200, 205, 215, 0.7) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(200, 205, 215, 0.7) 75%);
+    background-size: 14px 14px;
+    background-position: 0 0, 0 7px, 7px -7px, -7px 0px;
   }
 
   /* 3D helpers */
@@ -213,10 +322,6 @@
     opacity: 0.6;
   }
 }
-
-/* SAGAR cinematic landing */
-.sagar-moon { position:absolute; width:26rem; height:26rem; left:50%; top:18%; transform:translateX(-50%); border-radius:50%; background:radial-gradient(circle,rgba(170,170,170,.16),rgba(242,140,40,.05) 36%,transparent 68%); filter:blur(2px); }
-@media (max-width:640px){.sagar-moon{width:19rem;height:19rem;}}
 
 /* Vessel map labels */
 .leaflet-tooltip .vessel-tooltip-name { color: #f28c28 !important; }
