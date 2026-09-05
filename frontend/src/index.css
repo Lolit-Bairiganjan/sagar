@@ -1,4 +1,228 @@
-html, body, #root {
-  height: 100%;
-  margin: 0;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Valley Sans is applied globally. Add a licensed local font file at /public/fonts/ValleySans.woff2 for the exact typeface; the fallback keeps the UI usable until then. */
+@font-face {
+  font-family: 'Valley Sans';
+  src: url('/fonts/ValleySans.woff2') format('woff2');
+  font-display: swap;
+}
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Slightly larger base size so all rem-based text (text-xs, text-sm, etc.)
+       reads a bit bigger across the whole app. */
+    font-size: 18px;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    background-color: #05080d;
+  }
+
+  body {
+    @apply bg-bg-primary text-text-primary antialiased;
+    font-family: 'Valley Sans', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgba(63, 217, 232, 0.25);
+    color: #e6edf5;
+  }
+
+  /* Thin technical scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1a2433;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a3a52;
+  }
+}
+
+@layer utilities {
+  .font-mono-tech {
+    font-family: 'Valley Sans', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .label-eyebrow {
+    @apply font-mono-tech text-micro uppercase tracking-widest text-text-secondary;
+  }
+
+  .panel {
+    @apply bg-bg-panel border border-border shadow-panel;
+  }
+
+  /* ---- Glassmorphism ---- */
+  .glass {
+    background: linear-gradient(180deg, rgba(13, 19, 28, 0.62) 0%, rgba(10, 15, 23, 0.52) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-strong {
+    background: linear-gradient(180deg, rgba(13, 19, 28, 0.78) 0%, rgba(8, 12, 18, 0.7) 100%);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 12px 40px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+
+  .glass-subtle {
+    background: rgba(13, 19, 28, 0.4);
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-cyan {
+    background: linear-gradient(135deg, rgba(63, 217, 232, 0.1) 0%, rgba(13, 19, 28, 0.55) 60%);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid rgba(63, 217, 232, 0.28);
+  }
+
+  /* 3D helpers */
+  .perspective {
+    perspective: 1400px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  .corner-brackets {
+    position: relative;
+  }
+  .corner-brackets::before,
+  .corner-brackets::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-color: #f28c28;
+    opacity: 0.6;
+  }
+  .corner-brackets::before {
+    top: -1px;
+    left: -1px;
+    border-top: 1.5px solid;
+    border-left: 1.5px solid;
+  }
+  .corner-brackets::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 1.5px solid;
+    border-right: 1.5px solid;
+  }
+}
+
+/* ---- Ambient background orbs (glass needs something behind it to blur) ---- */
+.ambient-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.35;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* ---- Leaflet dark theme overrides ---- */
+.leaflet-container {
+  background: #060a10 !important;
+  font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
+}
+
+.leaflet-control-zoom a {
+  background-color: #0a0f17 !important;
+  color: #7f8ea3 !important;
+  border: 1px solid #1a2433 !important;
+}
+.leaflet-control-zoom a:hover {
+  background-color: #0d131c !important;
+  color: #f28c28 !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(5, 8, 13, 0.7) !important;
+  color: #4c5a6e !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a {
+  color: #7f8ea3 !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0a0f17 !important;
+  color: #e6edf5 !important;
+  border: 1px solid #1a2433 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+.leaflet-popup-tip {
+  background: #0a0f17 !important;
+  border: 1px solid #1a2433 !important;
+}
+.leaflet-popup-content {
+  margin: 10px 12px !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+}
+.leaflet-popup-close-button {
+  color: #7f8ea3 !important;
+}
+
+.vessel-marker-pulse {
+  animation: markerPulse 2s ease-in-out infinite;
+}
+@keyframes markerPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 1;
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+    opacity: 0.6;
+  }
+}
+
+/* SAGAR cinematic landing */
+.sagar-moon { position:absolute; width:26rem; height:26rem; left:50%; top:18%; transform:translateX(-50%); border-radius:50%; background:radial-gradient(circle,rgba(170,170,170,.16),rgba(242,140,40,.05) 36%,transparent 68%); filter:blur(2px); }
+@media (max-width:640px){.sagar-moon{width:19rem;height:19rem;}}
+
+/* Vessel map labels */
+.leaflet-tooltip .vessel-tooltip-name { color: #f28c28 !important; }
+.leaflet-tooltip { font-family: 'Google Sans Flex', 'Google Sans', sans-serif !important; }
+
+/* Token-free dark fallback for OpenStreetMap raster tiles. */
+.maris-dark-osm-tiles {
+  filter: brightness(0.52) invert(0.86) hue-rotate(175deg) saturate(0.7) contrast(1.18);
 }
