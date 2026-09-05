@@ -53,7 +53,7 @@ ai-model/data/
 # *.geojson
 
 # ---------- Node / React (frontend) ----------
-node_modules/
+frontend/node_modules/
 dist/
 build/
 .vite/
