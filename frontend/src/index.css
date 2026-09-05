@@ -331,3 +331,121 @@
 .maris-dark-osm-tiles {
   filter: brightness(0.52) invert(0.86) hue-rotate(175deg) saturate(0.7) contrast(1.18);
 }
+
+/* ---- Light Mode Overrides for Landing Page (via header toggle) ---- */
+.theme-light {
+  background-color: #EDEFF4 !important;
+  color: #14161B !important;
+}
+
+.theme-light .chaingpt-grid {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.045) 1px, transparent 1px) !important;
+}
+
+.theme-light .chaingpt-dots {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px) !important;
+}
+
+/* Sections in light mode inherit clean background with light subtle borders */
+.theme-light section {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Glass specimen panels in light mode */
+.theme-light .glass-specimen {
+  background: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.09) !important;
+  color: #14161B !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.theme-light .glass-specimen h2,
+.theme-light .glass-specimen h3,
+.theme-light .glass-specimen .font-display {
+  color: #14161B !important;
+}
+
+.theme-light .glass-specimen p {
+  color: #4B5262 !important;
+}
+
+/* Inner telemetry & code blocks inside glass specimens */
+.theme-light .glass-specimen [class*='bg-\[\#14161B\]'],
+.theme-light .glass-specimen [class*='bg-\[\#1B1E25\]'] {
+  background-color: #F5F7FA !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #14161B !important;
+}
+
+/* Outer standalone boxes and cards with dark background classes */
+.theme-light [class*='bg-\[\#14161B\]'],
+.theme-light [class*='bg-\[\#181B22\]'],
+.theme-light [class*='bg-\[\#1B1E25\]'],
+.theme-light [class*='bg-\[\#222630\]'],
+.theme-light [class*='bg-\[\#1E222A\]'] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.09) !important;
+  color: #14161B !important;
+}
+
+/* Borders in light mode */
+.theme-light [class*='border-\[\#2D323E\]'],
+.theme-light [class*='border-\[\#252932\]'] {
+  border-color: rgba(0, 0, 0, 0.09) !important;
+}
+
+/* Pinned Header in light mode */
+.theme-light header {
+  background-color: rgba(237, 239, 244, 0.92) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.theme-light header span.text-white {
+  color: #14161B !important;
+}
+
+.theme-light header a {
+  color: #555D6E !important;
+}
+.theme-light header a:hover {
+  color: #FF6600 !important;
+}
+
+/* Text and typography */
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4,
+.theme-light .font-display {
+  color: #14161B !important;
+}
+
+.theme-light .text-white,
+.theme-light strong.text-white,
+.theme-light span.text-white {
+  color: #14161B !important;
+}
+
+.theme-light p,
+.theme-light span.text-\[\#A2A8B5\],
+.theme-light div.text-\[\#A2A8B5\],
+.theme-light li.text-\[\#A2A8B5\] {
+  color: #4B5262 !important;
+}
+
+.theme-light .text-\[\#6B7280\],
+.theme-light .text-\[\#687080\] {
+  color: #6E7687 !important;
+}
+
+/* Footer in light mode */
+.theme-light footer {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #6E7687 !important;
+}
+
+

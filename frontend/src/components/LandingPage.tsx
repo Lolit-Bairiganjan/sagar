@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Lenis from 'lenis';
 import {
   Satellite,
@@ -8,6 +8,8 @@ import {
   Cpu,
   Compass,
   ChevronDown,
+  ChevronUp,
+
   ScanSearch,
   Wind,
   Target,
@@ -18,17 +20,21 @@ import {
   Github,
   Sun,
   Moon,
+  Volume2,
+  VolumeX,
   Database,
   BarChart3,
   FileText,
   AlertTriangle,
   Anchor,
 } from 'lucide-react';
+import { soundEngine } from '../utils/soundEngine';
+
 
 /* ─────────────────────────────────────────────
    Sailing Tanker Ship SVG with Flowing Smoke
    ───────────────────────────────────────────── */
-function SailingShipSVG({ className = '' }: { className?: string }) {
+function SailingShipSVG({ className = '', showSmoke = true }: { className?: string; showSmoke?: boolean }) {
   return (
     <svg
       viewBox="0 0 320 180"
@@ -36,12 +42,14 @@ function SailingShipSVG({ className = '' }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* ── Billowing Sailing Smoke Puffs ── */}
-      <g>
-        <circle cx="204" cy="24" r="5.5" fill="#B0B6C4" className="animate-smoke-1" />
-        <circle cx="200" cy="22" r="5" fill="#CBD0DC" className="animate-smoke-2" />
-        <circle cx="202" cy="23" r="4" fill="#8E95A5" className="animate-smoke-3" />
-      </g>
+      {/* ── Billowing Sailing Smoke Puffs (Only when surface sailing) ── */}
+      {showSmoke && (
+        <g>
+          <circle cx="204" cy="24" r="5.5" fill="#B0B6C4" className="animate-smoke-1" />
+          <circle cx="200" cy="22" r="5" fill="#CBD0DC" className="animate-smoke-2" />
+          <circle cx="202" cy="23" r="4" fill="#8E95A5" className="animate-smoke-3" />
+        </g>
+      )}
 
       {/* Hull */}
       <path
@@ -157,7 +165,7 @@ function AquariumChamber({ shipRotate, shipY, bubbleOpacity }: AquariumChamberPr
               }}
               className="w-48 sm:w-56 drop-shadow-[0_15px_25px_rgba(0,0,0,0.7)]"
             >
-              <SailingShipSVG className="w-full h-auto" />
+              <SailingShipSVG showSmoke={false} className="w-full h-auto" />
             </motion.div>
           </div>
 
@@ -198,9 +206,10 @@ function AquariumChamber({ shipRotate, shipY, bubbleOpacity }: AquariumChamberPr
    ───────────────────────────────────────────── */
 interface RubberBandLetterProps {
   char: string;
+  isLight?: boolean;
 }
 
-function RubberBandLetter({ char }: RubberBandLetterProps) {
+function RubberBandLetter({ char, isLight = false }: RubberBandLetterProps) {
   const [isStretched, setIsStretched] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -222,7 +231,11 @@ function RubberBandLetter({ char }: RubberBandLetterProps) {
   return (
     <motion.div
       onMouseEnter={handleMouseEnter}
-      className="relative aspect-square w-20 sm:w-28 lg:w-32 bg-[#1B1E25] border border-[#2D323E] flex items-center justify-center select-none overflow-hidden group cursor-pointer transition-colors duration-300"
+      className={`relative aspect-square w-20 sm:w-28 lg:w-32 border flex items-center justify-center select-none overflow-hidden group cursor-pointer transition-colors duration-300 ${
+        isLight
+          ? 'bg-white border-black/10 shadow-sm'
+          : 'bg-[#1B1E25] border-[#2D323E]'
+      }`}
       whileHover={{
         borderColor: 'rgba(255, 102, 0, 0.6)',
       }}
@@ -247,7 +260,7 @@ function RubberBandLetter({ char }: RubberBandLetterProps) {
                 scaleY: 1,
                 scaleX: 1,
                 y: 0,
-                color: '#FFFFFF',
+                color: isLight ? '#14161B' : '#FFFFFF',
               }
         }
         transition={{
@@ -264,6 +277,7 @@ function RubberBandLetter({ char }: RubberBandLetterProps) {
   );
 }
 
+
 /* ─────────────────────────────────────────────
    Main Landing Page Component
    ───────────────────────────────────────────── */
@@ -273,9 +287,53 @@ interface LandingPageProps {
 
 export default function LandingPage({ onEnter }: LandingPageProps) {
   const aquariumSectionRef = useRef<HTMLDivElement>(null);
-  const [themeMode, setThemeMode] = useState<'dark' | 'contrast'>('dark');
+  const lenisRef = useRef<Lenis | null>(null);
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const isLight = themeMode === 'light';
+  const [isAudioPlaying, setIsAudioPlaying] = useState(soundEngine.isPlaying());
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
-  /* Initialize Lenis smooth scroll with slower deceleration */
+  /* Subscribe to ambient audio state */
+  useEffect(() => {
+    const unsubscribe = soundEngine.subscribe((playing) => {
+      setIsAudioPlaying(playing);
+    });
+    return () => {
+      unsubscribe();
+      soundEngine.stopOcean();
+    };
+  }, []);
+
+  /* Global listener: Play water bubble sound when hovering over any button or interactive element */
+  useEffect(() => {
+    let currentHovered: Element | null = null;
+
+    const handleMouseOver = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const interactive = target.closest('button, a, [role="button"], .cursor-pointer');
+      if (interactive && interactive !== currentHovered) {
+        currentHovered = interactive;
+        soundEngine.playBubbleHover();
+      }
+    };
+
+    const handleMouseOut = (e: MouseEvent) => {
+      if (currentHovered && !currentHovered.contains(e.relatedTarget as Node | null)) {
+        currentHovered = null;
+      }
+    };
+
+    document.addEventListener('mouseover', handleMouseOver);
+    document.addEventListener('mouseout', handleMouseOut);
+
+    return () => {
+      document.removeEventListener('mouseover', handleMouseOver);
+      document.removeEventListener('mouseout', handleMouseOut);
+    };
+  }, []);
+
+  /* Initialize Lenis smooth scroll with slower deceleration & scroll-to-top visibility */
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.45,
@@ -284,6 +342,12 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       smoothWheel: true,
       wheelMultiplier: 0.85,
     });
+    lenisRef.current = lenis;
+
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 350);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     function raf(time: number) {
       lenis.raf(time);
@@ -292,9 +356,20 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
     requestAnimationFrame(raf);
 
     return () => {
+      window.removeEventListener('scroll', handleScroll);
       lenis.destroy();
+      lenisRef.current = null;
     };
   }, []);
+
+  const scrollToTop = () => {
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { duration: 1.2 });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
 
   /* Scroll-driven transformation for the aquarium ship */
   const { scrollYProgress } = useScroll({
@@ -308,10 +383,10 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
   return (
     <div
-      style={{ backgroundColor: themeMode === 'dark' ? '#14161B' : '#0E1013' }}
-      className="relative min-h-screen w-full text-white selection:bg-[#FF6600]/30 selection:text-white font-sans overflow-x-hidden"
+      style={{ backgroundColor: isLight ? '#EDEFF4' : '#14161B' }}
+      className={`relative min-h-screen w-full selection:bg-[#FF6600]/30 selection:text-white font-sans overflow-x-hidden ${isLight ? 'theme-light text-[#14161B]' : 'text-white'}`}
     >
-      {/* ── Background CAD Grid & Dark Ambience ── */}
+      {/* ── Background CAD Grid & Ambience ── */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute inset-0 chaingpt-grid opacity-30" />
         <div className="absolute inset-0 chaingpt-dots opacity-20" />
@@ -321,55 +396,109 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
       {/* ── Fixed Pinned Top Bar (Stays up on scroll) ── */}
       <header className="fixed top-0 inset-x-0 z-50 bg-[#14161B]/90 backdrop-blur-md border-b border-[#252932]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center bg-[#FF6600] text-white font-display font-black text-base shadow-[0_0_12px_rgba(255,102,0,0.4)]">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          {/* Left Brand Identity — Clickable to scroll to top */}
+          <button
+            onClick={scrollToTop}
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className="flex items-center gap-3 shrink-0 text-left cursor-pointer group select-none bg-transparent border-0 p-0"
+            title="Scroll to Top"
+          >
+            <div className="flex h-9 w-9 items-center justify-center bg-[#FF6600] text-white font-display font-black text-base shadow-[0_0_12px_rgba(255,102,0,0.4)] group-hover:scale-105 transition-transform">
               S
             </div>
-            <div className="flex flex-col">
-              <span className="font-display text-sm font-bold tracking-[0.2em] text-white flex items-center gap-1.5">
+            <div className="flex flex-col justify-center">
+              <span className="font-display text-sm font-bold tracking-[0.2em] text-white flex items-center gap-1.5 leading-none group-hover:text-[#FF6600] transition-colors">
                 SAGAR <span className="text-[10px] text-[#FF6600] font-normal">// DEFENSE</span>
               </span>
-              <span className="text-[9px] font-mono tracking-widest text-[#6B7280]">
+              <span className="text-[9px] font-mono tracking-widest text-[#6B7280] leading-none mt-1">
                 SAR-AIS INTELLIGENCE PLATFORM
               </span>
             </div>
-          </div>
+          </button>
 
-          {/* Quick Nav Links */}
-          <div className="hidden lg:flex items-center gap-6 font-mono text-xs tracking-wider text-[#A2A8B5]">
-            <a href="#radar-physics" className="hover:text-[#FF6600] transition-colors">
-              // 01. SAR PHYSICS
+          {/* Quick Nav Links (Ordered matching the physical page top-to-bottom) */}
+          <nav className="hidden xl:flex items-center gap-5 2xl:gap-7 font-mono text-[11px] tracking-wider text-[#A2A8B5] whitespace-nowrap">
+            <a
+              href="#submersion"
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className="hover:text-[#FF6600] transition-colors py-1"
+            >
+              // 01. FLUID TANK
             </a>
-            <a href="#submersion" className="hover:text-[#FF6600] transition-colors">
-              // 02. FLUID TANK
+            <a
+              href="#radar-physics"
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className="hover:text-[#FF6600] transition-colors py-1"
+            >
+              // 02. SAR PHYSICS
             </a>
-            <a href="#neural-model" className="hover:text-[#FF6600] transition-colors">
+            <a
+              href="#neural-model"
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className="hover:text-[#FF6600] transition-colors py-1"
+            >
               // 03. NEURAL AI
             </a>
-            <a href="#drift-model" className="hover:text-[#FF6600] transition-colors">
+            <a
+              href="#drift-model"
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className="hover:text-[#FF6600] transition-colors py-1"
+            >
               // 04. HYDRODYNAMICS
             </a>
-            <a href="#team" className="hover:text-[#FF6600] transition-colors">
+            <a
+              href="#team"
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className="hover:text-[#FF6600] transition-colors py-1"
+            >
               // 05. TEAM
             </a>
-          </div>
+          </nav>
 
-          <div className="flex items-center gap-3">
-            {/* Theme / Contrast Toggle */}
+
+          {/* Consistent Top Panel Action Buttons (All h-9 height, sharp styling, bubble hover SFX) */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Ambient Ocean Waves & Chimes Audio Toggle */}
             <button
-              onClick={() => setThemeMode((m) => (m === 'dark' ? 'contrast' : 'dark'))}
-              className="p-2 border border-[#2D323E] bg-[#1B1E25] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40 transition-colors"
-              title="Toggle Theme Contrast"
-              aria-label="Toggle Theme Contrast"
+              onClick={() => soundEngine.toggleOcean()}
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className={`h-9 px-3 inline-flex items-center gap-2 border font-mono text-xs tracking-wider transition-all select-none cursor-pointer whitespace-nowrap ${
+                isAudioPlaying
+                  ? 'border-[#FF6600] bg-[#FF6600]/15 text-[#FF6600] shadow-[0_0_10px_rgba(255,102,0,0.25)]'
+                  : isLight
+                  ? 'border-black/15 bg-white text-[#4B5262] hover:border-[#FF6600]'
+                  : 'border-[#2D323E] bg-[#1B1E25] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40'
+              }`}
+              title={isAudioPlaying ? 'Mute Ambient Ocean Waves & Chimes' : 'Play Ambient Ocean Waves & Chimes'}
+              aria-label="Toggle Ambient Audio"
             >
-              {themeMode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              {isAudioPlaying ? <Volume2 size={15} className="animate-pulse text-[#FF6600]" /> : <VolumeX size={15} />}
+              <span className="font-semibold text-[11px]">
+                {isAudioPlaying ? 'AUDIO ON' : 'AUDIO OFF'}
+              </span>
+            </button>
+
+            {/* Theme / Contrast Toggle (Dark / Light) */}
+            <button
+              onClick={() => setThemeMode((m) => (m === 'dark' ? 'light' : 'dark'))}
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className={`h-9 w-9 inline-flex items-center justify-center border transition-colors select-none cursor-pointer ${
+                isLight
+                  ? 'border-black/15 bg-white text-[#14161B] hover:border-[#FF6600]'
+                  : 'border-[#2D323E] bg-[#1B1E25] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40'
+              }`}
+              title={isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+              aria-label="Toggle Theme"
+            >
+              {isLight ? <Moon size={15} /> : <Sun size={15} />}
             </button>
 
             {/* Launch Console Button */}
             <button
               onClick={onEnter}
-              className="group flex items-center gap-2 bg-[#FF6600] px-5 py-2 font-display text-xs font-bold tracking-wider text-white shadow-[0_4px_14px_rgba(255,102,0,0.35)] transition-all duration-300 hover:bg-[#E05500] cursor-pointer active:scale-95"
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className="h-9 px-4 sm:px-5 inline-flex items-center gap-2 bg-[#FF6600] hover:bg-[#E05500] border border-[#FF6600] text-white font-display text-xs font-bold tracking-wider transition-all select-none active:scale-95 shadow-[0_2px_12px_rgba(255,102,0,0.3)] cursor-pointer whitespace-nowrap"
             >
               <span>LAUNCH CONSOLE</span>
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
@@ -377,6 +506,8 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
           </div>
         </div>
       </header>
+
+
 
       {/* ── Section 1: Hero with Sailing Ship & Intro Animation ── */}
       <section className="relative z-10 mx-auto max-w-7xl px-4 pt-32 pb-20 sm:px-6 lg:pt-36 lg:pb-28 text-center flex flex-col items-center">
@@ -405,7 +536,9 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.5 }}
-          className="inline-flex items-center gap-2 border border-[#2D323E] bg-[#1B1E25] px-3.5 py-1.5 font-mono text-xs tracking-widest text-[#FF6600] mb-6"
+          className={`inline-flex items-center gap-2 border px-3.5 py-1.5 font-mono text-xs tracking-widest text-[#FF6600] mb-6 ${
+            isLight ? 'border-black/10 bg-white shadow-sm' : 'border-[#2D323E] bg-[#1B1E25]'
+          }`}
         >
           <span>COPERNICUS SENTINEL-1 SAR · REVERSE-DRIFT · AIS FORENSICS</span>
         </motion.div>
@@ -431,6 +564,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
         >
           <button
             onClick={onEnter}
+            onMouseEnter={() => soundEngine.playBubbleHover()}
             className="flex items-center gap-3 bg-[#FF6600] px-8 py-3.5 font-display text-sm font-bold tracking-wider text-white shadow-[0_6px_20px_rgba(255,102,0,0.4)] transition-all duration-300 hover:bg-[#E05500] cursor-pointer active:scale-95"
           >
             <span>INVESTIGATE ACTIVE SPILLS</span>
@@ -438,13 +572,21 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
           </button>
 
           <a
-            href="#radar-physics"
-            className="flex items-center gap-2 border border-[#2D323E] bg-[#1B1E25] px-6 py-3.5 font-display text-sm font-semibold tracking-wider text-white transition-all duration-300 hover:border-[#FF6600]/50 hover:bg-[#222630]"
+            href="#submersion"
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className={`flex items-center gap-2 border px-6 py-3.5 font-display text-sm font-semibold tracking-wider transition-all duration-300 ${
+              isLight
+                ? 'border-black/15 bg-white text-[#14161B] hover:border-[#FF6600]/50 hover:bg-[#F3F5F9]'
+                : 'border-[#2D323E] bg-[#1B1E25] text-white hover:border-[#FF6600]/50 hover:bg-[#222630]'
+            }`}
           >
             <span>EXPLORE ARCHITECTURE</span>
             <ChevronDown size={16} />
           </a>
+
         </motion.div>
+
+
 
         {/* Live Status Strip */}
         <div className="mt-14 flex flex-wrap items-center justify-center gap-6 font-mono text-xs text-[#6B7280] border-t border-[#252932] pt-6">
@@ -737,9 +879,10 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
           {/* Square Modular Letters with 2.5s Persistence */}
           <div className="flex gap-2 sm:gap-4 justify-center items-center max-w-3xl mx-auto">
             {['S', 'A', 'G', 'A', 'R'].map((letter, i) => (
-              <RubberBandLetter key={i} char={letter} />
+              <RubberBandLetter key={i} char={letter} isLight={isLight} />
             ))}
           </div>
+
         </div>
       </section>
 
@@ -758,31 +901,49 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
-                role: 'AI & COMPUTER VISION LEAD',
-                focus: 'YOLOv8-Seg fine-tuning, mAP50 evaluation, Affine GeoJSON vectorization pipeline.',
-                github: 'https://github.com',
-                tag: 'DEV 2',
+                name: 'Lolit Bairiganjan',
+                role: 'AI / ML LEAD & MODEL ARCHITECT',
+                tag: 'AIML',
+                focus: 'YOLOv8-Seg neural segmentation training, CSIRO SAR dataset evaluation (5,538 scenes), mAP50 optimization (0.529), and morphological false-positive filtering.',
+                github: 'https://github.com/Lolit-Bairiganjan',
               },
               {
-                role: 'GEOSPATIAL & SAR PIPELINE LEAD',
-                focus: 'Sentinel-1 GRD calibration, Lee Sigma speckle filtering, 416x416 GeoTIFF tiling.',
+                name: 'Anuj Biswas',
+                role: 'SAR RADAR & PREPROCESSING LEAD',
+                tag: 'AIML',
+                focus: 'Sentinel-1 C-Band radiometric calibration, Lee Sigma speckle suppression (5x5 filter), Bragg wave damping backscatter analysis, and automated 416×416 GeoTIFF tiling.',
                 github: 'https://github.com',
-                tag: 'DEV 1',
               },
               {
-                role: 'HYDRODYNAMICS & BACKEND ARCHITECT',
-                focus: 'FastAPI service, reverse-drift leeway modeling, HYCOM current vector integration.',
+                name: 'Arnab Sarkar',
+                role: 'FRONTEND ARCHITECT & SYSTEMS LEAD',
+                tag: 'FRONTEND',
+                focus: 'ChainGPT-inspired UI architecture, fluid Lenis momentum scrolling, interactive hydrodynamics test chamber, and zero-dependency procedural Web Audio synthesizer.',
                 github: 'https://github.com',
+              },
+              {
+                name: 'Ashmita Majumder',
+                role: 'UI/UX DESIGNER & GEOSPATIAL LEAD',
+                tag: 'FRONTEND',
+                focus: 'Tactical Leaflet mission control deck, AIS vessel overlay telemetry, responsive glassmorphism interfaces, and light/dark theme contrast ergonomics.',
+                github: 'https://github.com',
+              },
+              {
+                name: 'Animesh Das',
+                role: 'BACKEND ARCHITECT & DRIFT MODEL LEAD',
                 tag: 'BACKEND',
+                focus: 'High-throughput asynchronous FastAPI microservices, 12h Eulerian reverse-drift leeway hindcasting, and HYCOM/ECMWF environmental vector ingestion.',
+                github: 'https://github.com',
               },
               {
-                role: 'FULLSTACK & SYSTEMS LEAD',
-                focus: 'PostGIS AIS spatio-temporal forensics, Leaflet radar UI & PDF legal dossier compiler.',
+                name: 'Pryoshi Paul',
+                role: 'POSTGIS & AIS FORENSICS ENGINEER',
+                tag: 'BACKEND',
+                focus: 'PostGIS spatio-temporal forensics (ST_DWithin), historical transponder gap & speed drop correlation, and automated maritime legal PDF dossiers.',
                 github: 'https://github.com',
-                tag: 'FULLSTACK',
               },
             ].map((member, i) => (
               <div
@@ -791,14 +952,17 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="font-mono text-[10px] px-2 py-0.5 bg-[#14161B] text-[#FF6600] border border-[#2D323E]">
+                    <span className="font-mono text-[10px] px-2 py-0.5 bg-[#14161B] text-[#FF6600] border border-[#2D323E] font-semibold tracking-wider">
                       {member.tag}
                     </span>
                     <span className="font-mono text-xs text-[#6B7280]">0{i + 1}</span>
                   </div>
-                  <h3 className="font-display text-sm font-bold text-white tracking-wide mb-2">
-                    {member.role}
+                  <h3 className="font-display text-base font-black text-white tracking-wide uppercase">
+                    {member.name}
                   </h3>
+                  <div className="font-mono text-[11px] text-[#FF6600] font-semibold tracking-wider mt-0.5 mb-2.5">
+                    {member.role}
+                  </div>
                   <p className="text-xs text-[#A2A8B5] leading-relaxed font-sans mb-6">
                     {member.focus}
                   </p>
@@ -808,6 +972,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                   href={member.github}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onMouseEnter={() => soundEngine.playBubbleHover()}
                   className="inline-flex items-center justify-center gap-2 border border-[#2D323E] bg-[#14161B] px-4 py-2 font-mono text-xs text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40 transition-colors"
                 >
                   <Github size={13} />
@@ -817,6 +982,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
               </div>
             ))}
           </div>
+
         </div>
       </section>
 
@@ -836,11 +1002,13 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
             <button
               onClick={onEnter}
+              onMouseEnter={() => soundEngine.playBubbleHover()}
               className="group inline-flex items-center gap-3 bg-[#FF6600] px-10 py-4 font-display text-base font-bold tracking-wider text-white shadow-[0_6px_25px_rgba(255,102,0,0.4)] transition-all duration-300 hover:bg-[#E05500] cursor-pointer active:scale-95"
             >
               <span>ENTER MISSION CONTROL CONSOLE</span>
               <ArrowRight size={18} className="transition-transform group-hover:translate-x-1.5" />
             </button>
+
           </div>
         </div>
       </section>
@@ -859,9 +1027,44 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
             <span>POSTGIS AIS</span>
             <span>·</span>
             <span>YOLOV8-SEG</span>
+            <span>·</span>
+            <button
+              onClick={scrollToTop}
+              onMouseEnter={() => soundEngine.playBubbleHover()}
+              className="inline-flex items-center gap-1 text-[#FF6600] hover:underline font-bold transition-colors cursor-pointer"
+              title="Return to top of page"
+            >
+              <span>BACK TO TOP</span>
+              <ChevronUp size={12} />
+            </button>
           </div>
         </div>
       </footer>
+
+      {/* ── Floating Back to Top Navigation ── */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, y: 16, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+            onClick={scrollToTop}
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className={`fixed bottom-6 right-6 z-40 h-10 px-3.5 inline-flex items-center gap-2 border font-mono text-xs tracking-wider shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-all cursor-pointer select-none active:scale-95 ${
+              isLight
+                ? 'bg-white border-black/15 text-[#14161B] hover:border-[#FF6600] hover:text-[#FF6600]'
+                : 'bg-[#1B1E25] border-[#2D323E] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]'
+            }`}
+            title="Scroll to Top"
+            aria-label="Scroll to Top"
+          >
+            <ChevronUp size={15} className="text-[#FF6600]" />
+            <span className="font-semibold text-[11px]">TOP</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
+
 }
