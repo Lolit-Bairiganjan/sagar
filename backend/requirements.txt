@@ -3,3 +3,4 @@ uvicorn
 psycopg2-binary
 pydantic
 python-dotenv
+requests
