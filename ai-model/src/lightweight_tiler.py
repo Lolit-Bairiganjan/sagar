@@ -27,10 +27,8 @@ def normalize_percentiles(data: np.ndarray, lower: int = LOWER_PERCENTILE, upper
     p_low = np.percentile(data[valid], lower)
     p_high = np.percentile(data[valid], upper)
 
-    if p_high == p_low:
-        return np.zeros(data.shape, dtype=np.float32)
-
-    clipped = np.clip(data, p_low, p_high)
+    clean_data = np.nan_to_num(data, nan=p_low)
+    clipped = np.clip(clean_data, p_low, p_high)
     norm = (clipped - p_low) / (p_high - p_low)
     return norm.astype(np.float32)
 

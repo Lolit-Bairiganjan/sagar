@@ -64,10 +64,18 @@ class CopernicusCDSEClient:
         }
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-        response = requests.post(CDSE_TOKEN_URL, data=data, headers=headers, timeout=15)
-        response.raise_for_status()
-        self._access_token = response.json()["access_token"]
-        return self._access_token
+        last_err = None
+        for attempt in range(1, 4):
+            try:
+                response = requests.post(CDSE_TOKEN_URL, data=data, headers=headers, timeout=20)
+                response.raise_for_status()
+                self._access_token = response.json()["access_token"]
+                return self._access_token
+            except Exception as e:
+                last_err = e
+                time.sleep(1.0 * attempt)
+
+        raise last_err
 
     def fetch_calibrated_geotiff(
         self,
@@ -137,14 +145,20 @@ class CopernicusCDSEClient:
             "Accept": "image/tiff",
         }
 
-        response = requests.post(CDSE_PROCESS_URL, json=payload, headers=headers, timeout=45)
-        response.raise_for_status()
+        last_err = None
+        for attempt in range(1, 4):
+            try:
+                response = requests.post(CDSE_PROCESS_URL, json=payload, headers=headers, timeout=50)
+                response.raise_for_status()
+                os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+                with open(output_path, "wb") as f:
+                    f.write(response.content)
+                return output_path
+            except Exception as e:
+                last_err = e
+                time.sleep(1.5 * attempt)
 
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(response.content)
-
-        return output_path
+        raise last_err
 
 
 def create_synthetic_test_geotiff(
