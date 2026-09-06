@@ -1,0 +1,451 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Valley Sans is applied globally. Add a licensed local font file at /public/fonts/ValleySans.woff2 for the exact typeface; the fallback keeps the UI usable until then. */
+@font-face {
+  font-family: 'Valley Sans';
+  src: url('/fonts/ValleySans.woff2') format('woff2');
+  font-display: swap;
+}
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Base text size and natural smooth scrolling */
+    font-size: 18px;
+    scroll-behavior: smooth;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    margin: 0;
+    background-color: #14161B;
+  }
+
+  body {
+    @apply bg-bg-primary text-text-primary antialiased;
+    font-family: 'Valley Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgba(255, 102, 0, 0.3);
+    color: #ffffff;
+  }
+
+  /* Thin technical scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1a2433;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a3a52;
+  }
+}
+
+@layer utilities {
+  .font-mono-tech {
+    font-family: 'Valley Sans', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .label-eyebrow {
+    @apply font-mono-tech text-micro uppercase tracking-widest text-text-secondary;
+  }
+
+  .panel {
+    @apply bg-bg-panel border border-border shadow-panel;
+  }
+
+  /* ---- Dark Glassmorphism (Console) ---- */
+  .glass {
+    background: linear-gradient(180deg, rgba(13, 19, 28, 0.62) 0%, rgba(10, 15, 23, 0.52) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-strong {
+    background: linear-gradient(180deg, rgba(13, 19, 28, 0.78) 0%, rgba(8, 12, 18, 0.7) 100%);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 12px 40px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+
+  .glass-subtle {
+    background: rgba(13, 19, 28, 0.4);
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-cyan {
+    background: linear-gradient(135deg, rgba(63, 217, 232, 0.1) 0%, rgba(13, 19, 28, 0.55) 60%);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid rgba(63, 217, 232, 0.28);
+  }
+
+  /* ---- Lenis Smooth Scroll Engine Styles ---- */
+  html.lenis, html.lenis body {
+    height: auto;
+  }
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+  .lenis.lenis-stopped {
+    overflow: hidden;
+  }
+  .lenis.lenis-smooth iframe {
+    pointer-events: none;
+  }
+
+  /* ---- ChainGPT CAD Grid & Glass Specimen Utilities ---- */
+  .chaingpt-grid {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .chaingpt-dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Smokestack Billowing Exhaust Animation */
+  @keyframes smokeBillow {
+    0% {
+      transform: translate(0, 0) scale(0.6);
+      opacity: 0.85;
+    }
+    50% {
+      transform: translate(-14px, -18px) scale(1.15);
+      opacity: 0.55;
+    }
+    100% {
+      transform: translate(-34px, -40px) scale(1.75);
+      opacity: 0;
+    }
+  }
+
+  .animate-smoke-1 {
+    animation: smokeBillow 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+  .animate-smoke-2 {
+    animation: smokeBillow 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite 1.05s;
+  }
+  .animate-smoke-3 {
+    animation: smokeBillow 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite 2.1s;
+  }
+
+  .glass-specimen {
+    background: linear-gradient(180deg, rgba(30, 34, 43, 0.75) 0%, rgba(20, 23, 29, 0.85) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 12px 36px -8px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-specimen-hover {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .glass-specimen-hover:hover {
+    border-color: rgba(255, 102, 0, 0.4);
+    box-shadow:
+      0 0 0 1px rgba(255, 102, 0, 0.25),
+      0 16px 40px -8px rgba(0, 0, 0, 0.7),
+      0 0 20px -4px rgba(255, 102, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  /* Aquarium Cylinder Glass Reflection */
+  .aquarium-glass {
+    background: linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.03) 25%,
+      rgba(20, 30, 45, 0.35) 50%,
+      rgba(255, 255, 255, 0.04) 75%,
+      rgba(255, 255, 255, 0.15) 100%
+    );
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow:
+      inset 4px 0 16px rgba(255, 255, 255, 0.15),
+      inset -4px 0 16px rgba(255, 255, 255, 0.15),
+      inset 0 0 30px rgba(0, 160, 255, 0.08),
+      0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Checkered flag decal band (as seen in ChainGPT incubator) */
+  .checkered-band {
+    background-image:
+      linear-gradient(45deg, rgba(200, 205, 215, 0.7) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(200, 205, 215, 0.7) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(200, 205, 215, 0.7) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(200, 205, 215, 0.7) 75%);
+    background-size: 14px 14px;
+    background-position: 0 0, 0 7px, 7px -7px, -7px 0px;
+  }
+
+  /* 3D helpers */
+  .perspective {
+    perspective: 1400px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  .corner-brackets {
+    position: relative;
+  }
+  .corner-brackets::before,
+  .corner-brackets::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-color: #f28c28;
+    opacity: 0.6;
+  }
+  .corner-brackets::before {
+    top: -1px;
+    left: -1px;
+    border-top: 1.5px solid;
+    border-left: 1.5px solid;
+  }
+  .corner-brackets::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 1.5px solid;
+    border-right: 1.5px solid;
+  }
+}
+
+/* ---- Ambient background orbs (glass needs something behind it to blur) ---- */
+.ambient-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.35;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* ---- Leaflet dark theme overrides ---- */
+.leaflet-container {
+  background: #060a10 !important;
+  font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
+}
+
+.leaflet-control-zoom a {
+  background-color: #0a0f17 !important;
+  color: #7f8ea3 !important;
+  border: 1px solid #1a2433 !important;
+}
+.leaflet-control-zoom a:hover {
+  background-color: #0d131c !important;
+  color: #f28c28 !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(5, 8, 13, 0.7) !important;
+  color: #4c5a6e !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a {
+  color: #7f8ea3 !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0a0f17 !important;
+  color: #e6edf5 !important;
+  border: 1px solid #1a2433 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+.leaflet-popup-tip {
+  background: #0a0f17 !important;
+  border: 1px solid #1a2433 !important;
+}
+.leaflet-popup-content {
+  margin: 10px 12px !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+}
+.leaflet-popup-close-button {
+  color: #7f8ea3 !important;
+}
+
+.vessel-marker-pulse {
+  animation: markerPulse 2s ease-in-out infinite;
+}
+@keyframes markerPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 1;
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+    opacity: 0.6;
+  }
+}
+
+/* Vessel map labels */
+.leaflet-tooltip .vessel-tooltip-name { color: #f28c28 !important; }
+.leaflet-tooltip { font-family: 'Google Sans Flex', 'Google Sans', sans-serif !important; }
+
+/* Token-free dark fallback for OpenStreetMap raster tiles. */
+.maris-dark-osm-tiles {
+  filter: brightness(0.52) invert(0.86) hue-rotate(175deg) saturate(0.7) contrast(1.18);
+}
+
+/* ---- Light Mode Overrides for Landing Page (via header toggle) ---- */
+.theme-light {
+  background-color: #EDEFF4 !important;
+  color: #14161B !important;
+}
+
+.theme-light .chaingpt-grid {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.045) 1px, transparent 1px) !important;
+}
+
+.theme-light .chaingpt-dots {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px) !important;
+}
+
+/* Sections in light mode inherit clean background with light subtle borders */
+.theme-light section {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Glass specimen panels in light mode */
+.theme-light .glass-specimen {
+  background: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.09) !important;
+  color: #14161B !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.theme-light .glass-specimen h2,
+.theme-light .glass-specimen h3,
+.theme-light .glass-specimen .font-display {
+  color: #14161B !important;
+}
+
+.theme-light .glass-specimen p {
+  color: #4B5262 !important;
+}
+
+/* Inner telemetry & code blocks inside glass specimens */
+.theme-light .glass-specimen [class*='bg-\[\#14161B\]'],
+.theme-light .glass-specimen [class*='bg-\[\#1B1E25\]'] {
+  background-color: #F5F7FA !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #14161B !important;
+}
+
+/* Outer standalone boxes and cards with dark background classes */
+.theme-light [class*='bg-\[\#14161B\]'],
+.theme-light [class*='bg-\[\#181B22\]'],
+.theme-light [class*='bg-\[\#1B1E25\]'],
+.theme-light [class*='bg-\[\#222630\]'],
+.theme-light [class*='bg-\[\#1E222A\]'] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.09) !important;
+  color: #14161B !important;
+}
+
+/* Borders in light mode */
+.theme-light [class*='border-\[\#2D323E\]'],
+.theme-light [class*='border-\[\#252932\]'] {
+  border-color: rgba(0, 0, 0, 0.09) !important;
+}
+
+/* Pinned Header in light mode */
+.theme-light header {
+  background-color: rgba(237, 239, 244, 0.92) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.theme-light header span.text-white {
+  color: #14161B !important;
+}
+
+.theme-light header a {
+  color: #555D6E !important;
+}
+.theme-light header a:hover {
+  color: #FF6600 !important;
+}
+
+/* Text and typography */
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4,
+.theme-light .font-display {
+  color: #14161B !important;
+}
+
+.theme-light .text-white,
+.theme-light strong.text-white,
+.theme-light span.text-white {
+  color: #14161B !important;
+}
+
+.theme-light p,
+.theme-light span.text-\[\#A2A8B5\],
+.theme-light div.text-\[\#A2A8B5\],
+.theme-light li.text-\[\#A2A8B5\] {
+  color: #4B5262 !important;
+}
+
+.theme-light .text-\[\#6B7280\],
+.theme-light .text-\[\#687080\] {
+  color: #6E7687 !important;
+}
+
+/* Footer in light mode */
+.theme-light footer {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #6E7687 !important;
+}
+
+

@@ -1,0 +1,6 @@
+ultralytics       # YOLOv8
+opencv-python
+numpy
+rasterio          # for reading GeoTIFF chips Dev 1 will send
+shapely           # for polygon area/elongation heuristics
+requests          # for pushing GeoJSON to backend

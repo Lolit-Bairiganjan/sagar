@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+from app.routes import investigations, spills
+
+app = FastAPI(title="SIH26143 — Maritime Oil Spill & AIS Correlation API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -10,19 +12,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def root():
-    return {"status": "ok"}
+app.include_router(investigations.router)
+app.include_router(spills.router)
 
-@app.get("/api/spills")
-def get_spills():
-    return {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [88.3, 21.6]},
-                "properties": {"id": 1, "confidence": 0.87, "suspect_vessel": "MV Example"}
-            }
-        ]
-    }
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

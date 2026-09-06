@@ -1,0 +1,36 @@
+name: oilspill-dev1
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - numpy
+  - rasterio
+  - gdal
+  - pip
+  - pip:
+      - pyroSAR==0.39.0
+
+# # Dev 1 Pipeline Setup
+
+# ### 1. Create the Conda environment
+
+# conda env create -f dev1_pipeline/environment.yml
+
+# ### 2. Activate the environment
+
+# conda activate oilspill-dev1
+
+# ### 3. Install ESA SNAP
+
+# Install ESA SNAP separately and make sure SNAP GPT is available.
+
+# ### 4. Run the pipeline
+
+# cd dev1_pipeline
+
+# python tile_sentinel1.py ^
+#   --input "path\to\Sentinel-1.SAFE" ^
+#   --output "path\to\output\tiles"
