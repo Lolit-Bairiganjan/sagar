@@ -530,16 +530,32 @@ export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggl
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.3 }}
-          className="font-display text-6xl sm:text-7xl lg:text-9xl font-black tracking-tight text-white leading-none mb-4"
+          className="font-sanskrit text-7xl sm:text-8xl lg:text-[9.5rem] font-bold tracking-normal text-white leading-none mb-3 drop-shadow-sm"
         >
           <span className="text-[#FF6600]">S</span>AGAR
         </motion.h1>
+
+        {/* Full Form */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.45 }}
+          className={`font-mono text-xs sm:text-sm md:text-base tracking-wider max-w-3xl mb-4 font-semibold ${
+            isLight ? 'text-[#374151]' : 'text-[#CBD5E1]'
+          }`}
+        >
+          <span className="text-[#FF6600]">S</span>AR-based{' '}
+          <span className="text-[#FF6600]">A</span>utomated{' '}
+          <span className="text-[#FF6600]">G</span>eospatial{' '}
+          <span className="text-[#FF6600]">A</span>nalysis for{' '}
+          <span className="text-[#FF6600]">R</span>ecognition of oil spills
+        </motion.div>
 
         {/* Technical Sub-badge */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
+          transition={{ duration: 0.6, delay: 0.55 }}
           className={`inline-flex items-center gap-2 border px-3.5 py-1.5 font-mono text-xs tracking-widest text-[#FF6600] mb-6 ${
             isLight ? 'border-black/10 bg-white shadow-sm' : 'border-[#2D323E] bg-[#1B1E25]'
           }`}
@@ -919,35 +935,35 @@ export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggl
                 role: 'SAR RADAR & PREPROCESSING LEAD',
                 tag: 'AIML',
                 focus: 'Sentinel-1 C-Band radiometric calibration, Lee Sigma speckle suppression (5x5 filter), Bragg wave damping backscatter analysis, and automated 416×416 GeoTIFF tiling.',
-                github: 'https://github.com',
+                github: 'https://github.com/codeCrusaders-png',
               },
               {
                 name: 'Arnab Sarkar',
                 role: 'FRONTEND ARCHITECT & SYSTEMS LEAD',
                 tag: 'FRONTEND',
                 focus: 'ChainGPT-inspired UI architecture, fluid Lenis momentum scrolling, interactive hydrodynamics test chamber, and zero-dependency procedural Web Audio synthesizer.',
-                github: 'https://github.com',
+                github: 'https://github.com/tech-speedy',
               },
               {
                 name: 'Ashmita Majumder',
                 role: 'UI/UX DESIGNER & GEOSPATIAL LEAD',
                 tag: 'FRONTEND',
                 focus: 'Tactical Leaflet mission control deck, AIS vessel overlay telemetry, responsive glassmorphism interfaces, and light/dark theme contrast ergonomics.',
-                github: 'https://github.com',
+                github: 'https://github.com/ashmitamajumder80-eng',
               },
               {
                 name: 'Animesh Das',
-                role: 'BACKEND ARCHITECT & DRIFT MODEL LEAD',
-                tag: 'BACKEND',
-                focus: 'High-throughput asynchronous FastAPI microservices, 12h Eulerian reverse-drift leeway hindcasting, and HYCOM/ECMWF environmental vector ingestion.',
-                github: 'https://github.com',
-              },
-              {
-                name: 'Pryoshi Paul',
                 role: 'POSTGIS & AIS FORENSICS ENGINEER',
                 tag: 'BACKEND',
                 focus: 'PostGIS spatio-temporal forensics (ST_DWithin), historical transponder gap & speed drop correlation, and automated maritime legal PDF dossiers.',
-                github: 'https://github.com',
+                github: 'https://github.com/BardOfAnimesh',
+              },
+              {
+                name: 'Preyoshi Paul',
+                role: 'BACKEND ARCHITECT & DRIFT MODEL LEAD',
+                tag: 'BACKEND',
+                focus: 'High-throughput asynchronous FastAPI microservices, 12h Eulerian reverse-drift leeway hindcasting, and HYCOM/ECMWF environmental vector ingestion.',
+                github: 'https://github.com/prayashipaul79-svg',
               },
             ].map((member, i) => (
               <div
@@ -972,17 +988,24 @@ export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggl
                   </p>
                 </div>
 
-                <a
-                  href={member.github}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onMouseEnter={() => soundEngine.playBubbleHover()}
-                  className="inline-flex items-center justify-center gap-2 border border-[#2D323E] bg-[#14161B] px-4 py-2 font-mono text-xs text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40 transition-colors"
-                >
-                  <Github size={13} />
-                  <span>GitHub Profile</span>
-                  <ExternalLink size={11} className="opacity-60" />
-                </a>
+                {member.github ? (
+                  <a
+                    href={member.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onMouseEnter={() => soundEngine.playBubbleHover()}
+                    className="inline-flex items-center justify-center gap-2 border border-[#2D323E] bg-[#14161B] px-4 py-2 font-mono text-xs text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40 transition-colors"
+                  >
+                    <Github size={13} />
+                    <span>GitHub Profile</span>
+                    <ExternalLink size={11} className="opacity-60" />
+                  </a>
+                ) : (
+                  <div className="inline-flex items-center justify-center gap-2 border border-[#2D323E]/50 bg-[#14161B]/50 px-4 py-2 font-mono text-xs text-[#6B7280] select-none">
+                    <Github size={13} className="opacity-50" />
+                    <span>Profile Coming Soon</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>

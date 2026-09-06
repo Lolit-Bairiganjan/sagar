@@ -1,10 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#05080D"/>
-  <circle cx="16" cy="16" r="10" fill="none" stroke="#3FD9E8" stroke-width="1.5"/>
-  <circle cx="16" cy="16" r="5.5" fill="none" stroke="#3FD9E8" stroke-width="1.2" opacity="0.6"/>
-  <circle cx="16" cy="16" r="1.8" fill="#3FD9E8"/>
-  <line x1="16" y1="2" x2="16" y2="7" stroke="#3FD9E8" stroke-width="1.2"/>
-  <line x1="16" y1="25" x2="16" y2="30" stroke="#3FD9E8" stroke-width="1.2"/>
-  <line x1="2" y1="16" x2="7" y2="16" stroke="#3FD9E8" stroke-width="1.2"/>
-  <line x1="25" y1="16" x2="30" y2="16" stroke="#3FD9E8" stroke-width="1.2"/>
+  <rect width="32" height="32" rx="7" fill="#14161B"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#2D323E" stroke-width="1"/>
+  <!-- Smokestack -->
+  <rect x="17.5" y="6" width="3" height="5.5" rx="0.5" fill="#FF6600"/>
+  <!-- Smoke puff -->
+  <circle cx="19" cy="4" r="1.2" fill="#9CA3AF" opacity="0.8"/>
+  <circle cx="21" cy="2.6" r="1" fill="#D1D5DB" opacity="0.6"/>
+  <!-- White Cabin / Bridge -->
+  <rect x="14.5" y="9.5" width="8" height="6.5" rx="0.5" fill="#E5E7EB"/>
+  <rect x="16" y="11" width="2" height="2" rx="0.2" fill="#14161B"/>
+  <rect x="19" y="11" width="2" height="2" rx="0.2" fill="#14161B"/>
+  <!-- Cargo containers -->
+  <rect x="9" y="12" width="4" height="4" rx="0.3" fill="#FF6600"/>
+  <!-- Main Ship Hull -->
+  <path d="M5 16H27L24.5 22.5H7.5L5 16Z" fill="#1F242D"/>
+  <!-- Vibrant Orange Waterline Stripe -->
+  <path d="M6.8 20.2H25.2L24.5 22.5H7.5L6.8 20.2Z" fill="#FF6600"/>
+  <!-- Portholes -->
+  <circle cx="10" cy="18" r="0.7" fill="#9CA3AF"/>
+  <circle cx="13" cy="18" r="0.7" fill="#9CA3AF"/>
+  <circle cx="16" cy="18" r="0.7" fill="#9CA3AF"/>
+  <!-- Sea wave accent -->
+  <path d="M4 25.5C8 24.5 12 26.5 16 25.5C20 24.5 24 26.5 28 25.5" stroke="#FF6600" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
 </svg>
