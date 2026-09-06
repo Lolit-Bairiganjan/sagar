@@ -35,6 +35,7 @@ ai-model/.env
 *.pth
 *.h5
 *.onnx
+!ai-model/weight/best.onnx
 *.weights
 runs/
 wandb/
