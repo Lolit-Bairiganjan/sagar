@@ -7,7 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    libexpat1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Install python dependencies
 COPY backend/requirements.txt ./backend/
