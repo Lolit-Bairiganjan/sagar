@@ -245,49 +245,51 @@ export default function App() {
           </main>
 
           {/* Single Consolidated Right Dock: flips between Suspects List and Selected Vessel Dossier */}
-          <div
-            className={`hidden w-80 shrink-0 border-l transition-colors lg:block relative z-20 overflow-hidden ${
-              isLight ? 'border-[#CBD0DA] bg-[#EDEFF4]' : 'border-[#252932] bg-[#181B22]'
-            }`}
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              {selectedVessel ? (
-                <motion.div
-                  key={`intel-${selectedVessel.id}`}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.22 }}
-                  className="h-full w-full"
-                >
-                  <IntelligencePanel
-                    spill={spill}
-                    satellite={satellite}
-                    ocean={ocean}
-                    selectedVessel={selectedVessel}
-                    onDeselect={handleDeselect}
-                    isLight={isLight}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="sidebar-suspects-list"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.22 }}
-                  className="h-full w-full"
-                >
-                  <Sidebar
-                    vessels={vessels}
-                    selectedVesselId={selectedVesselId}
-                    onSelectVessel={handleSelectVessel}
-                    isLight={isLight}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {activeSection !== 'Live Surveillance' && (
+            <div
+              className={`hidden w-80 shrink-0 border-l transition-colors lg:block relative z-20 overflow-hidden ${
+                isLight ? 'border-[#CBD0DA] bg-[#EDEFF4]' : 'border-[#252932] bg-[#181B22]'
+              }`}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {selectedVessel ? (
+                  <motion.div
+                    key={`intel-${selectedVessel.id}`}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.22 }}
+                    className="h-full w-full"
+                  >
+                    <IntelligencePanel
+                      spill={spill}
+                      satellite={satellite}
+                      ocean={ocean}
+                      selectedVessel={selectedVessel}
+                      onDeselect={handleDeselect}
+                      isLight={isLight}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="sidebar-suspects-list"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.22 }}
+                    className="h-full w-full"
+                  >
+                    <Sidebar
+                      vessels={vessels}
+                      selectedVesselId={selectedVesselId}
+                      onSelectVessel={handleSelectVessel}
+                      isLight={isLight}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
 
         <BottomTimeline isLight={isLight} />

@@ -7,6 +7,7 @@ import type {
   OceanographicData,
   Investigation,
   SystemStatus,
+  SurveillanceScanResult,
   LatLng,
 } from '../types';
 
@@ -373,9 +374,35 @@ export async function getInvestigation(): Promise<Investigation> {
 }
 
 export async function getSystemStatus(): Promise<SystemStatus> {
-  if (!USE_MOCK) {
-    const { data } = await apiClient.get<SystemStatus>('/system-status');
-    return data;
+  const base = getMockSystemStatus();
+  try {
+    const health = await apiClient.get('/health', { timeout: 2500 });
+    if (health.status === 200) {
+      return {
+        ...base,
+        backend: 'CONNECTED',
+      };
+    }
+  } catch {
+    // backend not running
   }
-  return withLatency(getMockSystemStatus(), 150);
+  return base;
+}
+
+// ---------------------------------------------------------------------------
+// Surveillance scan API
+// ---------------------------------------------------------------------------
+
+export async function triggerSurveillanceScan(
+  params: { zone?: string; bbox?: [number, number, number, number]; drill?: boolean } | string,
+  drill: boolean = false,
+): Promise<SurveillanceScanResult> {
+  const payload = typeof params === 'string' ? { zone: params, drill } : params;
+  // Always call the real backend for surveillance scans (no mock)
+  const { data } = await apiClient.post<SurveillanceScanResult>(
+    '/surveillance/scan',
+    payload,
+    { timeout: 65000 }, // Pipeline can take ~10-15s due to Copernicus API
+  );
+  return data;
 }

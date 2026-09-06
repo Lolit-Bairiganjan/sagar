@@ -172,3 +172,38 @@ export interface SystemStatus {
 }
 
 export type TimelineToken = 'T-12h' | 'T-8h' | 'T-4h' | 'T-2h' | 'NOW' | 'T+2h' | 'T+4h' | 'T+8h';
+
+// ---------------------------------------------------------------------------
+// Surveillance scan domain
+// ---------------------------------------------------------------------------
+
+export interface SurveillanceZone {
+  label: string;
+  bbox: [number, number, number, number];
+  description: string;
+}
+
+export interface SurveillanceSpill {
+  centroid_lat: number;
+  centroid_lon: number;
+  area_km2: number;
+  confidence: number;
+  detected_at: string;
+  spill_polygon_geojson: {
+    type: 'Polygon';
+    coordinates: [number, number][][];
+  };
+}
+
+export interface SurveillanceScanResult {
+  status: 'ZONE_CLEAN' | 'ANOMALY_DETECTED';
+  zone: string;
+  zone_key: string;
+  aoi_bbox: number[];
+  total_slicks_detected: number;
+  total_area_km2: number;
+  pipeline_latency_seconds: number;
+  timestamp: string;
+  spills: SurveillanceSpill[];
+  persisted_spill_ids: number[];
+}

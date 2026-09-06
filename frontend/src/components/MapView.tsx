@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents, Polygon as RLPolygon, Tooltip as RLTooltip } from 'react-leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Droplets, Route, TrendingUp, Radio, Satellite as SatelliteIcon } from 'lucide-react';
 import SpillLayer from './SpillLayer';
 import ShipTrackLayer from './ShipTrackLayer';
-import type { Spill, Vessel, VesselTrack, SatelliteObservation } from '../types';
+import SurveillancePanel from './SurveillancePanel';
+import type { Spill, Vessel, VesselTrack, SatelliteObservation, SurveillanceScanResult } from '../types';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 const CARTO_BASEMAP_KEY = import.meta.env.VITE_CARTO_BASEMAP_KEY as string | undefined;
@@ -79,6 +80,23 @@ function FitToSpill({ spill }: { spill: Spill | null }) {
   return null;
 }
 
+function FitToScan({ scan }: { scan: SurveillanceScanResult | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (scan && scan.aoi_bbox && scan.aoi_bbox.length === 4) {
+      const [minLon, minLat, maxLon, maxLat] = scan.aoi_bbox;
+      map.fitBounds(
+        [
+          [minLat, minLon],
+          [maxLat, maxLon],
+        ],
+        { padding: [60, 60], animate: true, maxZoom: 12 }
+      );
+    }
+  }, [scan, map]);
+  return null;
+}
+
 
 function DeselectOnEmptyMap({ onEmptyClick }: { onEmptyClick: () => void }) {
   useMapEvents({ click: () => onEmptyClick() });
@@ -128,6 +146,7 @@ export default function MapView({
     satellite: true,
   });
   const [tileError, setTileError] = useState(false);
+  const [latestScan, setLatestScan] = useState<SurveillanceScanResult | null>(null);
 
   const toggle = (key: keyof LayerToggles) =>
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -168,7 +187,7 @@ export default function MapView({
           />
         )}
 
-        {spill && (
+        {spill && activeSection !== 'Live Surveillance' && (
           <>
             <FitToSpill spill={spill} />
             <SpillLayer
@@ -182,16 +201,72 @@ export default function MapView({
           </>
         )}
 
-        <ShipTrackLayer
-          vessels={vessels}
-          tracks={tracks}
-          selectedVesselId={selectedVesselId}
-          onSelectVessel={onSelectVessel}
-          showAis={toggles.ais}
-        />
+        {activeSection === 'Live Surveillance' && <FitToScan scan={latestScan} />}
+
+        {activeSection !== 'Live Surveillance' && (
+          <ShipTrackLayer
+            vessels={vessels}
+            tracks={tracks}
+            selectedVesselId={selectedVesselId}
+            onSelectVessel={onSelectVessel}
+            showAis={toggles.ais}
+          />
+        )}
 
         <CenterOnVessel vessel={centerTargetVessel} />
         <DeselectOnEmptyMap onEmptyClick={onEmptyMapClick} />
+
+        {/* Live surveillance detection polygons */}
+        {latestScan?.spills?.map((detectedSpill, idx) => {
+          const coords: [number, number][] = detectedSpill.spill_polygon_geojson.coordinates[0].map(
+            ([lon, lat]: [number, number]) => [lat, lon] as [number, number]
+          );
+          return (
+            <RLPolygon
+              key={`surv-spill-${idx}`}
+              positions={coords}
+              pathOptions={{
+                color: '#EF4444',
+                weight: 2,
+                opacity: 0.9,
+                fillColor: '#EF4444',
+                fillOpacity: 0.35,
+              }}
+            >
+              <RLTooltip direction="top" sticky>
+                <div className="font-mono text-[11px] font-bold text-red-400 p-1">
+                  🚨 OIL SLICK DETECTED
+                  <div className="text-[9px] text-white font-normal mt-0.5">
+                    Area: <span className="text-red-400 font-bold">{detectedSpill.area_km2} km²</span>
+                  </div>
+                  <div className="text-[9px] text-white font-normal">
+                    Confidence: <span className="text-[#FF6600] font-bold">{(detectedSpill.confidence * 100).toFixed(1)}%</span>
+                  </div>
+                </div>
+              </RLTooltip>
+            </RLPolygon>
+          );
+        })}
+
+        {/* Scanned zone bounding box */}
+        {latestScan && (
+          <RLPolygon
+            positions={[
+              [latestScan.aoi_bbox[1], latestScan.aoi_bbox[0]],
+              [latestScan.aoi_bbox[1], latestScan.aoi_bbox[2]],
+              [latestScan.aoi_bbox[3], latestScan.aoi_bbox[2]],
+              [latestScan.aoi_bbox[3], latestScan.aoi_bbox[0]],
+            ]}
+            pathOptions={{
+              color: '#FF6600',
+              weight: 1.5,
+              opacity: 0.6,
+              fillColor: '#FF6600',
+              fillOpacity: 0.04,
+              dashArray: '6 8',
+            }}
+          />
+        )}
       </MapContainer>
 
       {/* Layer toggle control */}
@@ -218,20 +293,16 @@ export default function MapView({
             isLight={isLight}
           />
         </div>
-        <div
-          className={`pointer-events-auto border px-2 py-1 font-mono text-[10px] ${
-            isLight
-              ? 'bg-white/90 border-black/10 text-[#6B7280]'
-              : 'bg-[#181B22]/90 border-[#2D323E] text-[#6B7280]'
-          }`}
-        >
-          {useMapbox
-            ? 'Mapbox dark basemap'
-            : useCarto
-              ? 'CARTO Dark Matter basemap'
-              : 'Token-free dark OpenStreetMap fallback'}
-        </div>
       </div>
+
+      {activeSection === 'Live Surveillance' && (
+        <div className="pointer-events-none absolute left-3 top-16 z-[400]">
+          <SurveillancePanel
+            isLight={isLight}
+            onScanComplete={(result) => setLatestScan(result)}
+          />
+        </div>
+      )}
 
       {/* Active section indicator */}
       {activeSection && (
