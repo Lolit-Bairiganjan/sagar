@@ -1,7 +1,11 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
+_CONFIG_DIR = Path(__file__).resolve().parent
+load_dotenv(_CONFIG_DIR.parent / ".env")
 load_dotenv()
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL is None:
     raise RuntimeError("DATABASE_URL is not set.")
