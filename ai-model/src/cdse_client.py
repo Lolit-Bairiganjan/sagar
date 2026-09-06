@@ -12,6 +12,11 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
 from typing import List, Tuple, Optional
+from dotenv import load_dotenv
+
+# Automatically load environment variables from ai-model/.env
+load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
 CDSE_TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
@@ -68,8 +73,8 @@ class CopernicusCDSEClient:
         self,
         bbox: Tuple[float, float, float, float],
         output_path: str,
-        from_date: str = "2026-08-01T00:00:00Z",
-        to_date: str = "2026-09-06T23:59:59Z",
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
         width: int = 832,
         height: int = 832,
     ) -> str:
@@ -79,11 +84,19 @@ class CopernicusCDSEClient:
         Args:
             bbox: (min_lon, min_lat, max_lon, max_lat) in EPSG:4326 WGS84
             output_path: Local filepath to save the .tif
-            from_date: ISO 8601 start timestamp
-            to_date: ISO 8601 end timestamp
+            from_date: ISO 8601 start timestamp (defaults to 30 days before to_date)
+            to_date: ISO 8601 end timestamp (defaults to current UTC time)
             width: Image width in pixels (multiple of 416 recommended)
             height: Image height in pixels (multiple of 416 recommended)
         """
+        from datetime import datetime, timezone, timedelta
+
+        if not to_date:
+            to_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if not from_date:
+            # Default to 30 days prior
+            from_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
         if not self._access_token:
             self.authenticate()
 
