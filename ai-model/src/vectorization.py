@@ -5,17 +5,25 @@ Converts YOLOv8-Seg pixel contour coordinates into real-world WGS84 (EPSG:4326)
 GeoJSON polygons using GeoTIFF affine transform matrices from Dev 1's tiles.
 """
 
+import math
 from typing import List, Tuple, Dict, Any
 import numpy as np
 from shapely.geometry import Polygon, mapping
 from shapely.ops import transform as shapely_transform
-import pyproj
+
+try:
+    import pyproj
+    HAS_PYPROJ = True
+except ImportError:
+    HAS_PYPROJ = False
+
 import rasterio
 from rasterio.transform import xy
 
 
 # Geographic coordinate system (WGS84 GPS)
 WGS84_CRS = "EPSG:4326"
+
 
 
 def pixel_to_geo_coords(
@@ -63,14 +71,18 @@ def calculate_polygon_metrics(
 
     # If coordinates are valid GPS coordinates (-90 <= lat <= 90 and -180 <= lon <= 180)
     if -90.0 <= centroid_lat <= 90.0 and -180.0 <= centroid_lon <= 180.0:
-        try:
-            # Equal-area azimuthal projection centered at polygon centroid for accurate km²
-            proj_str = f"+proj=aeqd +lat_0={centroid_lat} +lon_0={centroid_lon} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
-            transformer = pyproj.Transformer.from_crs("EPSG:4326", proj_str, always_xy=True)
-            poly_projected = shapely_transform(transformer.transform, poly)
-            area_sq_km = round(poly_projected.area / 1_000_000.0, 4)  # m² to km²
-        except Exception:
-            area_sq_km = round(poly.area, 4)
+        if HAS_PYPROJ:
+            try:
+                # Equal-area azimuthal projection centered at polygon centroid for accurate km²
+                proj_str = f"+proj=aeqd +lat_0={centroid_lat} +lon_0={centroid_lon} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+                transformer = pyproj.Transformer.from_crs("EPSG:4326", proj_str, always_xy=True)
+                poly_projected = shapely_transform(transformer.transform, poly)
+                area_sq_km = round(poly_projected.area / 1_000_000.0, 4)  # m² to km²
+            except Exception:
+                area_sq_km = round(poly.area * (111.139 ** 2) * math.cos(math.radians(centroid_lat)), 4)
+        else:
+            # High-accuracy spherical approximation without pyproj
+            area_sq_km = round(poly.area * (111.139 ** 2) * math.cos(math.radians(centroid_lat)), 4)
     else:
         # Fallback for raw pixel space (e.g. non-georeferenced images)
         area_sq_km = round(poly.area / 10_000.0, 4)
