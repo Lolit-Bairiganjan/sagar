@@ -34,9 +34,8 @@ def pixel_to_geo_coords(
     """
     geo_coords = []
     for x, y in pixel_polygon:
-        # rasterio.transform.xy handles the affine multiplication (column=x, row=y)
         lon, lat = xy(geotiff_transform, y, x, offset='center')
-        geo_coords.append([round(lon, 7), round(lat, 7)])
+        geo_coords.append([round(float(lon), 7), round(float(lat), 7)])
 
     # Ensure the polygon ring is explicitly closed
     if geo_coords and geo_coords[0] != geo_coords[-1]:
