@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sagar-backend
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: singapore
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CDSE_CLIENT_ID
+        sync: false
+      - key: CDSE_CLIENT_SECRET
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    healthCheckPath: /health
+

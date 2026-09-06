@@ -4,3 +4,9 @@ psycopg2-binary
 pydantic
 python-dotenv
 requests
+numpy
+onnxruntime
+rasterio
+shapely
+pillow
+opencv-python-headless

@@ -1,0 +1,16 @@
+.git
+.gitignore
+frontend/
+data-processing/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+ai-model/data/
+ai-model/notebooks/
+ai-model/notes/
+ai-model/outputs/*.tif
+ai-model/outputs/*.jpg
+ai-model/yolov8n-seg.pt
+
