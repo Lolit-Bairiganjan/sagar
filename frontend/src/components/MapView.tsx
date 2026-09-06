@@ -33,32 +33,39 @@ interface LayerToggles {
   satellite: boolean;
 }
 
+import { soundEngine } from '../utils/soundEngine';
+
 function ToggleButton({
   active,
   onClick,
   icon: Icon,
   label,
+  isLight = false,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ElementType;
   label: string;
+  isLight?: boolean;
 }) {
   return (
-    <motion.button
-      onClick={onClick}
-      whileHover={{ scale: 1.04, rotateX: -6 }}
-      whileTap={{ scale: 0.95 }}
-      style={{ transformPerspective: 300 }}
-      className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 font-mono-tech text-[12px] uppercase tracking-wider transition-colors ${
+    <button
+      onClick={() => {
+        soundEngine.playBubbleHover();
+        onClick();
+      }}
+      onMouseEnter={() => soundEngine.playBubbleHover()}
+      className={`flex items-center gap-1.5 border px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
         active
-          ? 'border-accent-cyan/50 bg-accent-cyan/10 text-accent-cyan shadow-glowCyan'
-          : 'border-white/10 text-text-muted hover:text-text-secondary'
+          ? 'border-[#FF6600] bg-[#FF6600]/15 text-[#FF6600] shadow-[0_0_10px_rgba(255,102,0,0.25)]'
+          : isLight
+          ? 'border-black/10 bg-white text-[#4B5262] hover:border-[#FF6600]/60 hover:text-[#14161B]'
+          : 'border-[#2D323E] bg-[#14161B] text-[#8E95A5] hover:border-[#FF6600]/40 hover:text-white'
       }`}
     >
-      <Icon size={12} />
+      <Icon size={12} className={active ? 'text-[#FF6600]' : 'opacity-60'} />
       {label}
-    </motion.button>
+    </button>
   );
 }
 
@@ -98,6 +105,7 @@ interface MapViewProps {
   centerTargetVessel: Vessel | null;
   activeSection?: string;
   onEmptyMapClick: () => void;
+  isLight?: boolean;
 }
 
 export default function MapView({
@@ -110,6 +118,7 @@ export default function MapView({
   centerTargetVessel,
   activeSection,
   onEmptyMapClick,
+  isLight = false,
 }: MapViewProps) {
   const [toggles, setToggles] = useState<LayerToggles>({
     spill: true,
@@ -121,32 +130,32 @@ export default function MapView({
   const [tileError, setTileError] = useState(false);
 
   const toggle = (key: keyof LayerToggles) =>
-    setToggles((t) => ({ ...t, [key]: !t[key] }));
+    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const useMapbox = Boolean(MAPBOX_URL) && !tileError;
-  const useCarto = !useMapbox && Boolean(CARTO_DARK_URL) && !tileError;
+  const useMapbox = Boolean(MAPBOX_URL && !tileError);
+  const useCarto = Boolean(CARTO_DARK_URL && !tileError);
 
   return (
     <div className="relative h-full w-full">
       <MapContainer
-        center={[20.41, 65.82]}
-        zoom={11}
+        center={[spill?.centroid.lat ?? 18.9, spill?.centroid.lng ?? 71.5]}
+        zoom={10}
+        zoomControl={false}
+        attributionControl={false}
         className="h-full w-full"
-        zoomControl={true}
-        preferCanvas
       >
         {useMapbox ? (
           <TileLayer
-            url={MAPBOX_URL as string}
+            url={MAPBOX_URL!}
             attribution={MAPBOX_ATTRIBUTION}
+            maxZoom={19}
             eventHandlers={{ tileerror: () => setTileError(true) }}
           />
         ) : useCarto ? (
           <TileLayer
-            url={CARTO_DARK_URL as string}
+            url={CARTO_DARK_URL!}
             attribution={CARTO_ATTRIBUTION}
-            subdomains="abcd"
-            maxZoom={20}
+            maxZoom={19}
             eventHandlers={{ tileerror: () => setTileError(true) }}
           />
         ) : (
@@ -187,22 +196,35 @@ export default function MapView({
 
       {/* Layer toggle control */}
       <div className="pointer-events-none absolute left-3 top-3 z-[400] flex flex-col gap-2">
-        <div className="glass pointer-events-auto flex flex-wrap gap-1.5 rounded p-1.5">
-          <span className="flex items-center gap-1 px-1 font-mono-tech text-[12px] text-text-muted">
+        <div
+          className={`pointer-events-auto flex flex-wrap items-center gap-1.5 border p-1.5 shadow-md ${
+            isLight
+              ? 'bg-white/95 border-black/15 text-[#14161B]'
+              : 'bg-[#181B22]/95 border-[#2D323E] text-white'
+          }`}
+        >
+          <span className="flex items-center gap-1 px-1 font-mono text-[11px] font-bold text-[#FF6600]">
             <Layers size={12} /> LAYERS
           </span>
-          <ToggleButton active={toggles.spill} onClick={() => toggle('spill')} icon={Droplets} label="Spill" />
-          <ToggleButton active={toggles.drift} onClick={() => toggle('drift')} icon={Route} label="Backtrack" />
-          <ToggleButton active={toggles.forecast} onClick={() => toggle('forecast')} icon={TrendingUp} label="Forecast" />
-          <ToggleButton active={toggles.ais} onClick={() => toggle('ais')} icon={Radio} label="AIS" />
+          <ToggleButton active={toggles.spill} onClick={() => toggle('spill')} icon={Droplets} label="Spill" isLight={isLight} />
+          <ToggleButton active={toggles.drift} onClick={() => toggle('drift')} icon={Route} label="Backtrack" isLight={isLight} />
+          <ToggleButton active={toggles.forecast} onClick={() => toggle('forecast')} icon={TrendingUp} label="Forecast" isLight={isLight} />
+          <ToggleButton active={toggles.ais} onClick={() => toggle('ais')} icon={Radio} label="AIS" isLight={isLight} />
           <ToggleButton
             active={toggles.satellite}
             onClick={() => toggle('satellite')}
             icon={SatelliteIcon}
             label="Footprint"
+            isLight={isLight}
           />
         </div>
-        <div className="glass pointer-events-auto rounded px-2 py-1 font-mono-tech text-[12px] text-text-muted">
+        <div
+          className={`pointer-events-auto border px-2 py-1 font-mono text-[10px] ${
+            isLight
+              ? 'bg-white/90 border-black/10 text-[#6B7280]'
+              : 'bg-[#181B22]/90 border-[#2D323E] text-[#6B7280]'
+          }`}
+        >
           {useMapbox
             ? 'Mapbox dark basemap'
             : useCarto
@@ -211,18 +233,17 @@ export default function MapView({
         </div>
       </div>
 
-      {/* Active section indicator — 3D flip badge */}
+      {/* Active section indicator */}
       {activeSection && (
-        <div className="perspective pointer-events-none absolute right-3 top-3 z-[400]">
+        <div className="pointer-events-none absolute right-3 top-3 z-[400]">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeSection}
-              initial={{ opacity: 0, rotateX: -70, y: -8 }}
-              animate={{ opacity: 1, rotateX: 0, y: 0 }}
-              exit={{ opacity: 0, rotateX: 70, y: 8 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              style={{ transformOrigin: 'top center' }}
-              className="glass-cyan rounded px-3 py-1.5 font-mono-tech text-[12px] font-semibold uppercase tracking-widest text-accent-cyan"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.25 }}
+              className="border border-[#FF6600]/40 bg-[#FF6600]/15 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-widest text-[#FF6600] shadow-[0_0_12px_rgba(255,102,0,0.2)]"
             >
               {activeSection}
             </motion.div>

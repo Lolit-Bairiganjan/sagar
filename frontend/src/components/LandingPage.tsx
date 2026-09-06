@@ -283,13 +283,17 @@ function RubberBandLetter({ char, isLight = false }: RubberBandLetterProps) {
    ───────────────────────────────────────────── */
 interface LandingPageProps {
   onEnter: () => void;
+  themeMode?: 'dark' | 'light';
+  onToggleTheme?: () => void;
 }
 
-export default function LandingPage({ onEnter }: LandingPageProps) {
+export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggleTheme }: LandingPageProps) {
   const aquariumSectionRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<Lenis | null>(null);
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const [internalThemeMode, setInternalThemeMode] = useState<'dark' | 'light'>('dark');
+  const themeMode = propThemeMode ?? internalThemeMode;
   const isLight = themeMode === 'light';
+  const toggleTheme = onToggleTheme ?? (() => setInternalThemeMode((m) => (m === 'dark' ? 'light' : 'dark')));
   const [isAudioPlaying, setIsAudioPlaying] = useState(soundEngine.isPlaying());
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -481,7 +485,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
             {/* Theme / Contrast Toggle (Dark / Light) */}
             <button
-              onClick={() => setThemeMode((m) => (m === 'dark' ? 'light' : 'dark'))}
+              onClick={toggleTheme}
               onMouseEnter={() => soundEngine.playBubbleHover()}
               className={`h-9 w-9 inline-flex items-center justify-center border transition-colors select-none cursor-pointer ${
                 isLight

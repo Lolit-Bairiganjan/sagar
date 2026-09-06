@@ -2,15 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Play, Pause } from 'lucide-react';
 import type { TimelineToken } from '../types';
+import { soundEngine } from '../utils/soundEngine';
 
 const TOKENS: TimelineToken[] = ['T-12h', 'T-8h', 'T-4h', 'T-2h', 'NOW', 'T+2h', 'T+4h', 'T+8h'];
 const SPEEDS = [1, 2, 5, 10] as const;
 
 interface BottomTimelineProps {
   onIndexChange?: (index: number, token: TimelineToken) => void;
+  isLight?: boolean;
 }
 
-export default function BottomTimeline({ onIndexChange }: BottomTimelineProps) {
+export default function BottomTimeline({ onIndexChange, isLight = false }: BottomTimelineProps) {
   const [index, setIndex] = useState(TOKENS.indexOf('NOW'));
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
@@ -38,39 +40,65 @@ export default function BottomTimeline({ onIndexChange }: BottomTimelineProps) {
   }, [playing, speed]);
 
   return (
-    <div className="glass-strong relative z-20 flex h-16 shrink-0 items-center gap-4 rounded-none border-x-0 border-b-0 px-4">
+    <div
+      className={`relative z-20 flex h-14 shrink-0 items-center gap-4 border-t px-4 transition-colors ${
+        isLight
+          ? 'bg-[#EDEFF4] border-[#CBD0DA] text-[#14161B]'
+          : 'bg-[#14161B] border-[#252932] text-white'
+      }`}
+    >
       {/* Transport controls */}
       <div className="flex items-center gap-1.5">
-        <motion.button
-          onClick={() => setIndex((i) => Math.max(0, i - 1))}
-          whileHover={{ rotateY: -20, scale: 1.05 }}
-          whileTap={{ scale: 0.9 }}
-          style={{ transformPerspective: 300 }}
-          className="rounded border border-white/10 p-1.5 text-text-secondary transition-colors hover:border-accent-cyan/40 hover:text-accent-cyan"
+        <button
+          onClick={() => {
+            soundEngine.playBubbleHover();
+            setIndex((i) => Math.max(0, i - 1));
+          }}
+          onMouseEnter={() => soundEngine.playBubbleHover()}
+          className={`border p-1.5 transition-colors cursor-pointer select-none ${
+            isLight
+              ? 'border-black/15 bg-white text-[#4B5262] hover:border-[#FF6600] hover:text-[#FF6600]'
+              : 'border-[#2D323E] bg-[#181B22] text-[#A2A8B5] hover:border-[#FF6600] hover:text-white'
+          }`}
           aria-label="Previous"
         >
-          <ChevronLeft size={14} />
-        </motion.button>
-        <motion.button
-          onClick={() => setPlaying((p) => !p)}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.9, rotateX: 15 }}
-          style={{ transformPerspective: 300 }}
-          className="rounded border border-accent-cyan/40 bg-accent-cyan/10 p-1.5 text-accent-cyan shadow-glowCyan transition-colors hover:bg-accent-cyan/20"
+          <ChevronLeft size={13} />
+        </button>
+        <button
+          onClick={() => {
+            soundEngine.playBubbleHover();
+            setPlaying((p) => !p);
+          }}
+          onMouseEnter={() => soundEngine.playBubbleHover()}
+          className={`border p-1.5 transition-all cursor-pointer select-none ${
+            playing
+              ? 'border-[#FF6600] bg-[#FF6600] text-white shadow-[0_0_10px_rgba(255,102,0,0.4)]'
+              : 'border-[#FF6600]/40 bg-[#FF6600]/10 text-[#FF6600] hover:bg-[#FF6600]/20'
+          }`}
           aria-label={playing ? 'Pause' : 'Play'}
         >
-          {playing ? <Pause size={14} /> : <Play size={14} />}
-        </motion.button>
+          {playing ? <Pause size={13} /> : <Play size={13} />}
+        </button>
       </div>
 
       {/* Speed */}
-      <div className="flex items-center gap-1 border-r border-border pr-4 font-mono-tech text-[12px]">
+      <div
+        className={`flex items-center gap-1 border-r pr-4 font-mono text-[11px] ${
+          isLight ? 'border-black/15' : 'border-[#252932]'
+        }`}
+      >
         {SPEEDS.map((s) => (
           <button
             key={s}
-            onClick={() => setSpeed(s)}
-            className={`rounded px-1.5 py-1 transition-colors ${
-              speed === s ? 'bg-bg-raised text-accent-cyan' : 'text-text-muted hover:text-text-secondary'
+            onClick={() => {
+              soundEngine.playBubbleHover();
+              setSpeed(s);
+            }}
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className={`px-1.5 py-0.5 font-bold transition-colors cursor-pointer ${
+              speed === s
+                ? 'border border-[#FF6600] bg-[#FF6600]/15 text-[#FF6600]'
+                : 'text-[#6B7280] hover:text-[#FF6600]'
             }`}
           >
             {s}x
@@ -80,7 +108,11 @@ export default function BottomTimeline({ onIndexChange }: BottomTimelineProps) {
 
       {/* Timeline track */}
       <div className="relative flex flex-1 items-center">
-        <div className="absolute left-0 right-0 h-px bg-border" />
+        <div
+          className={`absolute left-0 right-0 h-px ${
+            isLight ? 'bg-black/10' : 'bg-[#252932]'
+          }`}
+        />
         <div className="relative flex w-full justify-between">
           {TOKENS.map((token, i) => {
             const isActive = i === index;
@@ -88,21 +120,31 @@ export default function BottomTimeline({ onIndexChange }: BottomTimelineProps) {
             return (
               <button
                 key={token}
-                onClick={() => setIndex(i)}
-                className="group flex flex-col items-center gap-1.5"
+                onClick={() => {
+                  soundEngine.playBubbleHover();
+                  setIndex(i);
+                }}
+                onMouseEnter={() => soundEngine.playBubbleHover()}
+                className="group flex flex-col items-center gap-1 cursor-pointer"
               >
                 <span
-                  className={`h-2.5 w-2.5 rounded-full border transition-all ${
+                  className={`h-2.5 w-2.5 transition-all ${
                     isActive
-                      ? 'scale-125 border-accent-cyan bg-accent-cyan shadow-[0_0_8px_rgba(242,140,40,0.8)]'
+                      ? 'scale-125 bg-[#FF6600] shadow-[0_0_8px_rgba(255,102,0,0.8)]'
                       : isPast
-                        ? 'border-accent-cyan/50 bg-accent-cyan/30'
-                        : 'border-border bg-bg-raised group-hover:border-border-bright'
+                      ? 'bg-[#FF6600]/50'
+                      : isLight
+                      ? 'bg-black/20'
+                      : 'bg-[#2D323E]'
                   }`}
                 />
                 <span
-                  className={`font-mono-tech text-[12px] tracking-wide ${
-                    isActive ? 'font-semibold text-accent-cyan' : token === 'NOW' ? 'text-text-primary' : 'text-text-muted'
+                  className={`font-mono text-[10px] tracking-wider ${
+                    isActive
+                      ? 'font-bold text-[#FF6600]'
+                      : token === 'NOW'
+                      ? 'font-semibold text-inherit'
+                      : 'text-[#6B7280]'
                   }`}
                 >
                   {token}

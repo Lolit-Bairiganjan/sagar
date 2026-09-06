@@ -18,13 +18,18 @@ import {
   Mail,
   CheckCircle2,
   ArrowLeft,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { soundEngine } from '../utils/soundEngine';
 import type { Investigation, SystemStatus } from '../types';
 
 interface TopBarProps {
   investigation: Investigation | null;
   systemStatus: SystemStatus | null;
   onBackToLanding?: () => void;
+  isLight?: boolean;
+  onToggleTheme?: () => void;
 }
 
 function useIndianClock() {
@@ -70,20 +75,23 @@ function ToggleRow({
 }) {
   return (
     <button
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left transition-colors hover:bg-white/5"
+      onClick={() => {
+        soundEngine.playBubbleHover();
+        onChange(!checked);
+      }}
+      className="flex w-full items-center justify-between gap-3 px-2 py-1.5 text-left transition-colors hover:bg-white/5 cursor-pointer"
     >
-      <span className="flex items-center gap-2 font-mono-tech text-[12px] text-text-secondary">
-        <Icon size={13} className="text-text-muted" />
+      <span className="flex items-center gap-2 font-mono text-[12px] text-inherit opacity-80">
+        <Icon size={13} className="opacity-60" />
         {label}
       </span>
       <span
-        className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
-          checked ? 'bg-accent-cyan/60' : 'bg-white/10'
+        className={`relative h-4 w-7 shrink-0 transition-colors ${
+          checked ? 'bg-[#FF6600]' : 'bg-white/15'
         }`}
       >
         <span
-          className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
+          className={`absolute top-0.5 h-3 w-3 bg-white transition-transform ${
             checked ? 'translate-x-3.5' : 'translate-x-0.5'
           }`}
         />
@@ -92,7 +100,7 @@ function ToggleRow({
   );
 }
 
-function SettingsPanel({ onClose }: { onClose: () => void }) {
+function SettingsPanel({ onClose, isLight = false }: { onClose: () => void; isLight?: boolean }) {
   const [notifications, setNotifications] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [imperialUnits, setImperialUnits] = useState(false);
@@ -123,15 +131,21 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-      className="glass-strong absolute right-0 top-11 z-50 w-64 rounded-lg p-2 shadow-glass"
+      className={`absolute right-0 top-11 z-50 w-64 border p-2 shadow-lg ${
+        isLight ? 'bg-white border-black/15 text-[#14161B]' : 'bg-[#181B22] border-[#2D323E] text-white'
+      }`}
     >
-      <div className="mb-1 flex items-center justify-between px-2 py-1">
-        <span className="label-eyebrow">Settings</span>
-        <button onClick={onClose} className="text-text-muted transition-colors hover:text-accent-cyan">
+      <div className="mb-1 flex items-center justify-between px-2 py-1 border-b border-white/5">
+        <span className="font-mono text-[10px] tracking-wider uppercase text-[#FF6600] font-semibold">Settings</span>
+        <button
+          onClick={onClose}
+          onMouseEnter={() => soundEngine.playBubbleHover()}
+          className="text-inherit opacity-60 transition-colors hover:opacity-100 hover:text-[#FF6600] cursor-pointer"
+        >
           <X size={14} />
         </button>
       </div>
-      <div className="space-y-0.5">
+      <div className="space-y-0.5 pt-1">
         <ToggleRow icon={Bell} label="Notifications" checked={notifications} onChange={setNotifications} />
         <ToggleRow icon={RefreshCw} label="Auto-refresh feed" checked={autoRefresh} onChange={setAutoRefresh} />
         <ToggleRow icon={Ruler} label="Imperial units" checked={imperialUnits} onChange={setImperialUnits} />
@@ -254,6 +268,8 @@ export default function TopBar({
   investigation,
   systemStatus,
   onBackToLanding,
+  isLight = false,
+  onToggleTheme,
 }: TopBarProps) {
   const indianTime = useIndianClock();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -273,95 +289,140 @@ export default function TopBar({
   }, []);
 
   return (
-    <header className="glass-strong relative z-30 flex h-14 shrink-0 items-center justify-between rounded-none border-x-0 border-t-0 px-4">
+    <header
+      className={`relative z-30 flex h-14 shrink-0 items-center justify-between border-b px-4 transition-colors ${
+        isLight
+          ? 'bg-[#EDEFF4] border-[#CBD0DA] text-[#14161B]'
+          : 'bg-[#14161B] border-[#252932] text-white'
+      }`}
+    >
       {/* Left: identity */}
       <div className="flex min-w-0 items-center gap-3">
-        <svg width="26" height="26" viewBox="0 0 32 32" className="shrink-0 text-accent-cyan">
-          <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          <circle cx="16" cy="16" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.6" />
-          <circle cx="16" cy="16" r="1.8" fill="currentColor" />
-        </svg>
+        <div className="flex h-8 w-8 items-center justify-center bg-[#FF6600] text-white font-display font-black text-sm shadow-[0_0_10px_rgba(255,102,0,0.4)]">
+          S
+        </div>
         <div className="min-w-0 leading-tight">
-          <div className="font-mono-tech text-sm font-semibold tracking-[0.15em] text-text-primary">
-            SAGAR
+          <div className="font-display text-xs font-bold tracking-[0.18em] flex items-center gap-1.5">
+            SAGAR <span className="text-[10px] text-[#FF6600] font-normal">// DEFENSE</span>
           </div>
-          <div className="label-eyebrow truncate">
-            <span className="text-accent-orange">SAR-based Automated Geospatial Analysis for Recognition of oil spills</span>
+          <div className="font-mono text-[9px] tracking-widest text-[#6B7280]">
+            MISSION CONTROL CONSOLE
           </div>
         </div>
-        <div className="ml-2 hidden items-center gap-1.5 border-l border-border pl-3 sm:flex">
+        <div
+          className={`ml-2 hidden items-center gap-1.5 border-l pl-3 sm:flex ${
+            isLight ? 'border-black/15' : 'border-[#252932]'
+          }`}
+        >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-green shadow-[0_0_6px_rgba(61,232,136,0.8)]" />
-          <span className="font-mono-tech text-micro uppercase tracking-widest text-accent-green">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-accent-green">
             System Online
           </span>
         </div>
         {onBackToLanding && (
           <button
             onClick={onBackToLanding}
-            className="ml-3 hidden sm:flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-mono text-xs font-semibold text-cyan-300 transition-all hover:bg-cyan-500/20 hover:border-cyan-400 cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.2)] active:scale-95"
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className={`ml-3 hidden sm:flex items-center gap-1.5 border px-2.5 py-1 font-mono text-[11px] font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+              isLight
+                ? 'border-black/15 bg-white text-[#14161B] hover:border-[#FF6600] hover:text-[#FF6600]'
+                : 'border-[#2D323E] bg-[#1B1E25] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]'
+            }`}
+            title="Return to Mission Hub Landing Page"
           >
-            <ArrowLeft size={13} />
-            <span>MISSION HUB</span>
+            <ArrowLeft size={12} className="text-[#FF6600]" />
+            <span>RETURN TO HUB</span>
           </button>
         )}
       </div>
 
       {/* Center: operation */}
       <div className="hidden flex-col items-center leading-tight md:flex">
-        <div className="font-mono-tech text-xs font-semibold tracking-widest text-text-primary">
+        <div className="font-mono text-xs font-semibold tracking-widest">
           {investigation?.operationName ?? 'OPERATION: BLUE HORIZON'}
         </div>
-        <div className="label-eyebrow">{investigation?.sector ?? 'ARABIAN SEA / SECTOR 07'}</div>
+        <div className="font-mono text-[10px] tracking-wider text-[#FF6600]">
+          {investigation?.sector ?? 'ARABIAN SEA / SECTOR 07'}
+        </div>
       </div>
 
       {/* Right: status + controls */}
-      <div className="flex items-center gap-4">
-        <div className="hidden items-center gap-4 border-r border-border pr-4 xl:flex">
+      <div className="flex items-center gap-3 sm:gap-4">
+        <div
+          className={`hidden items-center gap-3 sm:gap-4 border-r pr-3 sm:pr-4 xl:flex ${
+            isLight ? 'border-black/15' : 'border-[#252932]'
+          }`}
+        >
           <StatusChip icon={Satellite} label="SAT" active={systemStatus?.satellite !== 'OFFLINE'} />
           <StatusChip icon={Radio} label="AIS" active={systemStatus?.ais !== 'OFFLINE'} />
           <StatusChip icon={CloudSun} label="WX" active={systemStatus?.weather !== 'OFFLINE'} />
         </div>
-        <span className="font-mono-tech text-xs tabular-nums text-text-secondary">{indianTime}</span>
+        <span className="font-mono text-xs tabular-nums text-[#6B7280]">{indianTime}</span>
+
+        {/* Theme Toggle Button */}
+        {onToggleTheme && (
+          <button
+            onClick={onToggleTheme}
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className={`h-8 w-8 inline-flex items-center justify-center border transition-colors select-none cursor-pointer ${
+              isLight
+                ? 'border-black/15 bg-white text-[#14161B] hover:border-[#FF6600]'
+                : 'border-[#2D323E] bg-[#1B1E25] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40'
+            }`}
+            title={isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            aria-label="Toggle Theme"
+          >
+            {isLight ? <Moon size={14} /> : <Sun size={14} />}
+          </button>
+        )}
 
         {/* Settings */}
         <div className="relative">
-          <motion.button
-            whileHover={{ rotateZ: 45, scale: 1.08 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-            onClick={() => setSettingsOpen((v) => !v)}
-            className={`rounded p-1.5 transition-colors hover:bg-white/5 hover:text-accent-cyan ${
-              settingsOpen ? 'bg-white/5 text-accent-cyan' : 'text-text-secondary'
+          <button
+            onClick={() => {
+              soundEngine.playBubbleHover();
+              setSettingsOpen((v) => !v);
+            }}
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className={`h-8 w-8 inline-flex items-center justify-center border transition-colors select-none cursor-pointer ${
+              settingsOpen
+                ? 'border-[#FF6600] text-[#FF6600]'
+                : isLight
+                ? 'border-black/15 bg-white text-[#4B5262] hover:border-[#FF6600]'
+                : 'border-[#2D323E] bg-[#1B1E25] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40'
             }`}
             aria-label="Settings"
           >
-            <Settings size={16} />
-          </motion.button>
+            <Settings size={14} />
+          </button>
           <AnimatePresence>
-            {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+            {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} isLight={isLight} />}
           </AnimatePresence>
         </div>
 
         {/* User */}
         <div className="relative" ref={userMenuRef}>
-          <motion.button
-            whileHover={{ scale: 1.1, rotateY: 15 }}
-            whileTap={{ scale: 0.92 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+          <button
             onClick={() => {
+              soundEngine.playBubbleHover();
               if (userEmail) {
                 setUserMenuOpen((v) => !v);
               } else {
                 setLoginOpen(true);
               }
             }}
-            className={`flex items-center gap-1.5 rounded p-1.5 transition-colors hover:bg-white/5 hover:text-accent-cyan ${
-              userMenuOpen ? 'bg-white/5 text-accent-cyan' : 'text-text-secondary'
+            onMouseEnter={() => soundEngine.playBubbleHover()}
+            className={`h-8 w-8 inline-flex items-center justify-center border transition-colors select-none cursor-pointer ${
+              userMenuOpen
+                ? 'border-[#FF6600] text-[#FF6600]'
+                : isLight
+                ? 'border-black/15 bg-white text-[#4B5262] hover:border-[#FF6600]'
+                : 'border-[#2D323E] bg-[#1B1E25] text-[#A2A8B5] hover:text-white hover:border-[#FF6600]/40'
             }`}
             aria-label="User profile"
           >
-            {userEmail ? <CheckCircle2 size={18} className="text-accent-green" /> : <UserCircle2 size={18} />}
-          </motion.button>
+            {userEmail ? <CheckCircle2 size={16} className="text-accent-green" /> : <UserCircle2 size={16} />}
+          </button>
 
           <AnimatePresence>
             {userMenuOpen && userEmail && (
@@ -370,18 +431,20 @@ export default function TopBar({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                className="glass-strong absolute right-0 top-11 z-50 w-56 rounded-lg p-2 shadow-glass"
+                className={`absolute right-0 top-11 z-50 w-56 border p-2 shadow-lg ${
+                  isLight ? 'bg-white border-black/15' : 'bg-[#181B22] border-[#2D323E]'
+                }`}
               >
                 <div className="border-b border-white/5 px-2 pb-2">
                   <div className="label-eyebrow">Signed in as</div>
-                  <div className="truncate font-mono-tech text-[12px] text-text-primary">{userEmail}</div>
+                  <div className="truncate font-mono text-[12px] text-text-primary">{userEmail}</div>
                 </div>
                 <button
                   onClick={() => {
                     setUserEmail(null);
                     setUserMenuOpen(false);
                   }}
-                  className="mt-1 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-mono-tech text-[12px] text-text-secondary transition-colors hover:bg-white/5 hover:text-accent-red"
+                  className="mt-1 flex w-full items-center gap-2 px-2 py-1.5 text-left font-mono text-[12px] text-[#A2A8B5] transition-colors hover:text-accent-red"
                 >
                   <LogOut size={13} />
                   Sign out
