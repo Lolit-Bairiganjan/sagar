@@ -50,6 +50,7 @@ export default {
       },
       fontFamily: {
         display: ['"Chakra Petch"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sanskrit: ['"Yatra One"', '"Rozha One"', 'ui-serif', 'serif'],
         mono: ['"Roboto Mono"', '"JetBrains Mono"', 'ui-monospace', 'monospace'],
         sans: ['"Inter"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
