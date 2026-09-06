@@ -8,13 +8,14 @@ can trigger on-demand Copernicus SAR scans over priority maritime zones.
 import json
 import subprocess
 import os
+import sys
 from pathlib import Path
 from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-router = APIRouter(tags=["surveillance"])
+router = APIRouter(prefix="/api", tags=["surveillance"])
 
 # ---------------------------------------------------------------------------
 # Predefined priority maritime surveillance zones across Indian Ocean & EEZ
@@ -23,7 +24,7 @@ PRIORITY_ZONES = {
     "mumbai_high": {
         "label": "Mumbai High",
         "bbox": [71.25, 19.35, 71.55, 19.65],
-        "description": "Offshore crude platforms & western tanker lanes",
+        "description": "Offshore oil platforms & western tanker lanes",
     },
     "gulf_of_kutch": {
         "label": "Gulf of Kutch",
@@ -58,9 +59,9 @@ PRIORITY_ZONES = {
     "vizag_anchorage": {
         "label": "Visakhapatnam",
         "bbox": [83.20, 17.50, 83.70, 18.00],
-        "description": "Naval base & crude refinery anchorage",
+        "description": "Eastern naval command & port waters",
     },
-    "paradip_port": {
+    "paradip_dhamra": {
         "label": "Paradip & Dhamra",
         "bbox": [86.60, 20.10, 87.10, 20.60],
         "description": "Northern Bay of Bengal bulk crude gateway",
@@ -80,9 +81,24 @@ PRIORITY_ZONES = {
 # Resolve paths relative to this file
 _BACKEND_DIR = Path(__file__).resolve().parent.parent.parent  # backend/
 _PROJECT_ROOT = _BACKEND_DIR.parent  # sagar/
-_AI_MODEL_PYTHON = _PROJECT_ROOT / "ai-model" / ".venv" / "Scripts" / "python.exe"
 _PIPELINE_SCRIPT = _PROJECT_ROOT / "ai-model" / "src" / "pipeline_option3.py"
 _OUTPUT_JSON = _PROJECT_ROOT / "ai-model" / "outputs" / "option3_summary.json"
+
+
+def get_ai_python_executable() -> Path:
+    """
+    Dynamically finds the best Python executable to run the AI pipeline:
+    1. Dedicated ai-model venv on Windows: ai-model/.venv/Scripts/python.exe
+    2. Dedicated ai-model venv on Linux: ai-model/.venv/bin/python
+    3. Active running Python interpreter (sys.executable) - ideal for Docker/Render/Cloud
+    """
+    win_venv = _PROJECT_ROOT / "ai-model" / ".venv" / "Scripts" / "python.exe"
+    if win_venv.exists():
+        return win_venv
+    linux_venv = _PROJECT_ROOT / "ai-model" / ".venv" / "bin" / "python"
+    if linux_venv.exists():
+        return linux_venv
+    return Path(sys.executable)
 
 
 # ---------------------------------------------------------------------------
@@ -130,14 +146,18 @@ def trigger_scan(req: ScanRequest):
         raise HTTPException(status_code=400, detail="Provide either 'zone' or 'bbox'")
 
     # Verify pipeline prerequisites exist
-    if not _AI_MODEL_PYTHON.exists():
-        raise HTTPException(status_code=500, detail=f"AI model Python not found at {_AI_MODEL_PYTHON}")
+    ai_python = get_ai_python_executable()
+    if not ai_python.exists():
+        raise HTTPException(status_code=500, detail=f"Python interpreter not found at {ai_python}")
     if not _PIPELINE_SCRIPT.exists():
         raise HTTPException(status_code=500, detail=f"Pipeline script not found at {_PIPELINE_SCRIPT}")
 
+    # Ensure output directory exists
+    _OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+
     # Build subprocess command
     cmd = [
-        str(_AI_MODEL_PYTHON),
+        str(ai_python),
         str(_PIPELINE_SCRIPT),
         "--bbox", str(bbox[0]), str(bbox[1]), str(bbox[2]), str(bbox[3]),
     ]
