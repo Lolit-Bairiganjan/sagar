@@ -945,11 +945,11 @@ export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggl
                 github: 'https://github.com/tech-speedy',
               },
               {
-                name: 'Ashmita Majumdar',
+                name: 'Ashmita Majumder',
                 role: 'UI/UX DESIGNER & GEOSPATIAL LEAD',
                 tag: 'FRONTEND',
                 focus: 'Tactical Leaflet mission control deck, AIS vessel overlay telemetry, responsive glassmorphism interfaces, and light/dark theme contrast ergonomics.',
-                github: '',
+                github: 'https://github.com/ashmitamajumder80-eng',
               },
               {
                 name: 'Animesh Das',
