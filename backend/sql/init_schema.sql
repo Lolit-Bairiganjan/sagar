@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS ais_positions (
 );
 CREATE INDEX IF NOT EXISTS idx_ais_geom ON ais_positions USING GIST (geom);
 CREATE INDEX IF NOT EXISTS idx_ais_ts ON ais_positions (ts);
+CREATE INDEX IF NOT EXISTS idx_ais_mmsi_ts ON ais_positions (mmsi, ts);
 
 CREATE TABLE IF NOT EXISTS spill_events (
     id SERIAL PRIMARY KEY,
@@ -77,8 +78,6 @@ SELECT
 FROM ais_positions
 WINDOW w AS (PARTITION BY mmsi ORDER BY ts);
 
--- Filters out invalid coordinates, impossible speeds (>100 km/h), and
--- duplicate-timestamp pings. MAX_PLAUSIBLE_SPEED_KMH matches config.py.
 CREATE OR REPLACE VIEW clean_ais_positions AS
 SELECT
   id, mmsi, ts, geom, hours_elapsed, km_traveled, derived_speed_kmh
@@ -91,8 +90,6 @@ WHERE
 
 
 -- ── §6: Trajectory Reconstruction (segmentation) ────────────────────────
--- SEGMENT_GAP_HOURS = 2 (matches config.py; calibrated on real AIS data:
--- only 0.131% of real inter-ping gaps exceed 2 hours).
 
 CREATE OR REPLACE VIEW ais_trajectory_segments_points AS
 SELECT
@@ -117,8 +114,6 @@ GROUP BY mmsi, segment_id;
 
 
 -- ── §11: Dark Target / AIS Gap Detection ────────────────────────────────
--- AIS_GAP_FLAG_HOURS = 1 (matches config.py; only 0.357% of real gaps
--- exceed 1 hour, making this a meaningful signal, not noise).
 
 CREATE OR REPLACE VIEW ais_gap_events AS
 SELECT
@@ -131,9 +126,6 @@ SELECT
 FROM clean_ais_positions
 WINDOW w AS (PARTITION BY mmsi ORDER BY ts);
 
--- Buffer size is DYNAMIC per spill area (matches the main scoring query's
--- buffer tiers) -- fixed from an earlier version that hardcoded 25000m
--- for every spill regardless of size.
 CREATE OR REPLACE VIEW ais_suspicious_gaps AS
 SELECT
   g.mmsi, g.gap_start_ts, g.gap_end_ts, g.gap_duration_hours,
@@ -160,11 +152,6 @@ JOIN spill_events s
 
 
 -- ── §12: Speed Anomaly Detection ─────────────────────────────────────────
--- Calibrated on ~400K real AIS speed transitions: among underway vessels
--- (>=5 km/h) with a meaningful absolute change (>=3 km/h), a full speed
--- doubling/halving (ratio >= 1.0) sits at the ~90th percentile of real
--- behavior. Excludes near-zero starting speeds (e.g. leaving port) which
--- would otherwise dominate the signal with mundane speed changes.
 
 CREATE OR REPLACE VIEW ais_speed_anomalies AS
 SELECT
@@ -204,7 +191,6 @@ FROM vessels v;
 
 
 -- ── §9 (cont.): Port/Harbor Zone Exclusion ───────────────────────────────
--- 0.93 km/h = 0.5 knots (spec's stated stationary threshold).
 
 CREATE OR REPLACE VIEW vessel_docking_status AS
 SELECT
@@ -224,3 +210,15 @@ SELECT
 FROM ais_positions_enriched ap
 LEFT JOIN port_zones pz
   ON ST_Within(ap.geom, pz.geom);
+
+
+-- ── §13: Trajectory Alignment (informational flag only) ─────────────────
+
+CREATE OR REPLACE VIEW ais_vessel_heading AS
+SELECT
+  mmsi,
+  ts,
+  geom,
+  DEGREES(ST_Azimuth(LAG(geom) OVER w, geom)) AS heading_deg
+FROM ais_positions
+WINDOW w AS (PARTITION BY mmsi ORDER BY ts);

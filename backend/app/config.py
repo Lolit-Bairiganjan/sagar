@@ -29,8 +29,10 @@ WIND_DRIFT_FACTOR = 0.03
 FALLBACK_CURRENT_SPEED_MS = 0.3
 DEFAULT_DRIFT_HOURS = 3.0
 
-# Weights sum to 0.85, NOT 1.0 -- trajectory_alignment is not yet built.
-# The scoring query divides by 0.85 (sum of ACTIVE dimensions), not 1.0.
+# Weights sum to 0.85, NOT 1.0 -- trajectory_alignment (S13) is flag-only,
+# not scored. The scoring query divides by 0.85 (sum of ACTIVE dimensions),
+# not 1.0 -- do not "fix" this to sum to 1.0, or every score will be
+# silently deflated.
 SCORING_WEIGHTS = {
     "proximity": 0.35,
     "trajectory_alignment": 0.15,
