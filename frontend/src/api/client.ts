@@ -324,24 +324,36 @@ const MOCK_TRACK_OFFSETS: Record<string, LatLng[]> = {
 
 export async function getSpillData(): Promise<Spill> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Spill>('/spill');
-    return data;
+    try {
+      const { data } = await apiClient.get<Spill>('/spill');
+      return data;
+    } catch {
+      // Backend /spill endpoint not implemented yet, fall back gracefully to simulation
+    }
   }
   return withLatency(getMockSpill());
 }
 
 export async function getVessels(): Promise<Vessel[]> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Vessel[]>('/vessels');
-    return data;
+    try {
+      const { data } = await apiClient.get<Vessel[]>('/vessels');
+      return data;
+    } catch {
+      // Backend /vessels endpoint not implemented yet, fall back gracefully to simulation
+    }
   }
   return withLatency(getMockVessels(), 520);
 }
 
 export async function getVesselTrack(vesselId: string): Promise<VesselTrack> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<VesselTrack>(`/vessels/${vesselId}/track`);
-    return data;
+    try {
+      const { data } = await apiClient.get<VesselTrack>(`/vessels/${vesselId}/track`);
+      return data;
+    } catch {
+      // Fall back to simulation track
+    }
   }
   const vessels = getMockVessels();
   const vessel = vessels.find((v) => v.id === vesselId) ?? vessels[0];
@@ -351,24 +363,36 @@ export async function getVesselTrack(vesselId: string): Promise<VesselTrack> {
 
 export async function getSatelliteData(): Promise<SatelliteObservation> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<SatelliteObservation>('/satellite');
-    return data;
+    try {
+      const { data } = await apiClient.get<SatelliteObservation>('/satellite');
+      return data;
+    } catch {
+      // Fall back gracefully to simulation
+    }
   }
   return withLatency(getMockSatellite());
 }
 
 export async function getOceanographicData(): Promise<OceanographicData> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<OceanographicData>('/ocean');
-    return data;
+    try {
+      const { data } = await apiClient.get<OceanographicData>('/ocean');
+      return data;
+    } catch {
+      // Fall back gracefully to simulation
+    }
   }
   return withLatency(getMockOceanographic(), 260);
 }
 
 export async function getInvestigation(): Promise<Investigation> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Investigation>('/investigation');
-    return data;
+    try {
+      const { data } = await apiClient.get<Investigation>('/investigation');
+      return data;
+    } catch {
+      // Fall back gracefully to simulation
+    }
   }
   return withLatency(getMockInvestigation(), 200);
 }
@@ -376,7 +400,8 @@ export async function getInvestigation(): Promise<Investigation> {
 export async function getSystemStatus(): Promise<SystemStatus> {
   const base = getMockSystemStatus();
   try {
-    const health = await apiClient.get('/health', { timeout: 2500 });
+    // 10s timeout accommodates Render free tier container spin-up
+    const health = await apiClient.get('/health', { timeout: 10000 });
     if (health.status === 200) {
       return {
         ...base,
@@ -384,7 +409,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
       };
     }
   } catch {
-    // backend not running
+    // backend not running or cold-starting
   }
   return base;
 }
