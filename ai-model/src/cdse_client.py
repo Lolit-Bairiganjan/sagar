@@ -6,6 +6,8 @@ from ESA's cloud GPUs, eliminating the need for 1.5 GB .SAFE downloads and ESA S
 """
 
 import os
+import sys
+import time
 import json
 import requests
 import numpy as np
@@ -99,11 +101,21 @@ class CopernicusCDSEClient:
         """
         from datetime import datetime, timezone, timedelta
 
+        # Ensure from_date and to_date are formatted as full ISO 8601 strings (YYYY-MM-DDTHH:MM:SSZ)
         if not to_date:
             to_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        elif len(to_date) == 10:
+            to_date = f"{to_date}T23:59:59Z"
+        elif not to_date.endswith("Z") and "+" not in to_date:
+            to_date = f"{to_date}Z"
+
         if not from_date:
             # Default to 30 days prior
             from_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        elif len(from_date) == 10:
+            from_date = f"{from_date}T00:00:00Z"
+        elif not from_date.endswith("Z") and "+" not in from_date:
+            from_date = f"{from_date}Z"
 
         if not self._access_token:
             self.authenticate()
@@ -149,13 +161,22 @@ class CopernicusCDSEClient:
         for attempt in range(1, 4):
             try:
                 response = requests.post(CDSE_PROCESS_URL, json=payload, headers=headers, timeout=50)
-                response.raise_for_status()
+                if not response.ok:
+                    try:
+                        err_json = response.json()
+                        err_msg = err_json.get("error", {}).get("message", response.text)
+                    except Exception:
+                        err_msg = response.text
+                    raise RuntimeError(f"Copernicus API ({response.status_code}): {err_msg}")
                 os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
                 with open(output_path, "wb") as f:
                     f.write(response.content)
                 return output_path
             except Exception as e:
                 last_err = e
+                # Don't retry on client 400 Bad Request (invalid coordinates/resolution)
+                if isinstance(e, RuntimeError) and "Copernicus API (400)" in str(e):
+                    raise
                 time.sleep(1.5 * attempt)
 
         raise last_err

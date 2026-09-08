@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, useMap, useMapEvents, Polygon as RLPolygon, Tooltip as RLTooltip } from 'react-leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Droplets, Route, TrendingUp, Radio, Satellite as SatelliteIcon } from 'lucide-react';
 import SpillLayer from './SpillLayer';
 import ShipTrackLayer from './ShipTrackLayer';
 import SurveillancePanel from './SurveillancePanel';
-import type { Spill, Vessel, VesselTrack, SatelliteObservation, SurveillanceScanResult } from '../types';
+import HistoricalSpillsPanel from './HistoricalSpillsPanel';
+import type { Spill, Vessel, VesselTrack, SatelliteObservation, SurveillanceScanResult, HistoricalSpillDetail } from '../types';
+import { soundEngine } from '../utils/soundEngine';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 const CARTO_BASEMAP_KEY = import.meta.env.VITE_CARTO_BASEMAP_KEY as string | undefined;
@@ -33,8 +35,6 @@ interface LayerToggles {
   ais: boolean;
   satellite: boolean;
 }
-
-import { soundEngine } from '../utils/soundEngine';
 
 function ToggleButton({
   active,
@@ -97,6 +97,22 @@ function FitToScan({ scan }: { scan: SurveillanceScanResult | null }) {
   return null;
 }
 
+function FitToAoi({ bbox }: { bbox: [number, number, number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (bbox && bbox.length === 4) {
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      map.fitBounds(
+        [
+          [minLat, minLon],
+          [maxLat, maxLon],
+        ],
+        { padding: [80, 80], animate: true, maxZoom: 11 }
+      );
+    }
+  }, [bbox, map]);
+  return null;
+}
 
 function DeselectOnEmptyMap({ onEmptyClick }: { onEmptyClick: () => void }) {
   useMapEvents({ click: () => onEmptyClick() });
@@ -113,6 +129,97 @@ function CenterOnVessel({ vessel }: { vessel: Vessel | null }) {
   return null;
 }
 
+/**
+ * Interactive Map Drawing Handler:
+ * Allows users to drag and draw a rectangular bounding box directly on Leaflet.
+ * Bi-directionally syncs coordinates back to the SurveillancePanel inputs.
+ */
+function BoxDrawHandler({
+  isDrawing,
+  onBoxDrawn,
+}: {
+  isDrawing: boolean;
+  onBoxDrawn: (bbox: [number, number, number, number]) => void;
+}) {
+  const map = useMap();
+  const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
+  const [currentPoint, setCurrentPoint] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    if (isDrawing) {
+      map.dragging.disable();
+      map.getContainer().style.cursor = 'crosshair';
+    } else {
+      map.dragging.enable();
+      map.getContainer().style.cursor = '';
+      setStartPoint(null);
+      setCurrentPoint(null);
+    }
+  }, [isDrawing, map]);
+
+  useMapEvents({
+    mousedown(e) {
+      if (!isDrawing) return;
+      setStartPoint([e.latlng.lat, e.latlng.lng]);
+      setCurrentPoint([e.latlng.lat, e.latlng.lng]);
+    },
+    mousemove(e) {
+      if (!isDrawing || !startPoint) return;
+      setCurrentPoint([e.latlng.lat, e.latlng.lng]);
+    },
+    mouseup(e) {
+      if (!isDrawing || !startPoint) return;
+      const lat1 = startPoint[0];
+      const lng1 = startPoint[1];
+      const lat2 = e.latlng.lat;
+      const lng2 = e.latlng.lng;
+
+      const minLon = Math.min(lng1, lng2);
+      const maxLon = Math.max(lng1, lng2);
+      const minLat = Math.min(lat1, lat2);
+      const maxLat = Math.max(lat1, lat2);
+
+      if (Math.abs(maxLon - minLon) > 0.005 && Math.abs(maxLat - minLat) > 0.005) {
+        soundEngine.playBubbleHover();
+        onBoxDrawn([
+          Number(minLon.toFixed(4)),
+          Number(minLat.toFixed(4)),
+          Number(maxLon.toFixed(4)),
+          Number(maxLat.toFixed(4)),
+        ]);
+      }
+      setStartPoint(null);
+      setCurrentPoint(null);
+    },
+  });
+
+  if (!isDrawing || !startPoint || !currentPoint) return null;
+
+  const minLat = Math.min(startPoint[0], currentPoint[0]);
+  const maxLat = Math.max(startPoint[0], currentPoint[0]);
+  const minLng = Math.min(startPoint[1], currentPoint[1]);
+  const maxLng = Math.max(startPoint[1], currentPoint[1]);
+
+  return (
+    <RLPolygon
+      positions={[
+        [minLat, minLng],
+        [minLat, maxLng],
+        [maxLat, maxLng],
+        [maxLat, minLng],
+      ]}
+      pathOptions={{
+        color: '#FF6600',
+        weight: 2,
+        opacity: 0.9,
+        fillColor: '#FF6600',
+        fillOpacity: 0.18,
+        dashArray: '4 4',
+      }}
+    />
+  );
+}
+
 interface MapViewProps {
   spill: Spill | null;
   vessels: Vessel[];
@@ -124,6 +231,8 @@ interface MapViewProps {
   activeSection?: string;
   onEmptyMapClick: () => void;
   isLight?: boolean;
+  onSelectHistoricalSpill?: (detail: HistoricalSpillDetail) => void;
+  onNavigateSection?: (section: string) => void;
 }
 
 export default function MapView({
@@ -137,6 +246,8 @@ export default function MapView({
   activeSection,
   onEmptyMapClick,
   isLight = false,
+  onSelectHistoricalSpill,
+  onNavigateSection,
 }: MapViewProps) {
   const [toggles, setToggles] = useState<LayerToggles>({
     spill: true,
@@ -147,12 +258,50 @@ export default function MapView({
   });
   const [tileError, setTileError] = useState(false);
   const [latestScan, setLatestScan] = useState<SurveillanceScanResult | null>(null);
+  const [targetAoi, setTargetAoi] = useState<{
+    bbox: [number, number, number, number];
+    label: string;
+  } | null>({
+    bbox: [71.25, 19.35, 71.55, 19.65],
+    label: 'Mumbai High Offshore',
+  });
+
+  // Bi-directional bounding box state synchronized with SurveillancePanel
+  const [customBbox, setCustomBbox] = useState<[string, string, string, string]>([
+    '71.25',
+    '19.35',
+    '71.55',
+    '19.65',
+  ]);
+  const [isDrawingBox, setIsDrawingBox] = useState(false);
 
   const toggle = (key: keyof LayerToggles) =>
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const useMapbox = Boolean(MAPBOX_URL && !tileError);
   const useCarto = Boolean(CARTO_DARK_URL && !tileError);
+
+  // Derived parsed custom bbox for real-time map preview polygon
+  const parsedCustomBbox = useMemo(() => {
+    const nums = customBbox.map((v) => parseFloat(v));
+    if (nums.some(isNaN)) return null;
+    return [
+      Math.min(nums[0], nums[2]),
+      Math.min(nums[1], nums[3]),
+      Math.max(nums[0], nums[2]),
+      Math.max(nums[1], nums[3]),
+    ] as [number, number, number, number];
+  }, [customBbox]);
+
+  const handleBoxDrawn = (bbox: [number, number, number, number]) => {
+    setCustomBbox([
+      bbox[0].toString(),
+      bbox[1].toString(),
+      bbox[2].toString(),
+      bbox[3].toString(),
+    ]);
+    setIsDrawingBox(false);
+  };
 
   return (
     <div className="relative h-full w-full">
@@ -216,7 +365,43 @@ export default function MapView({
         <CenterOnVessel vessel={centerTargetVessel} />
         <DeselectOnEmptyMap onEmptyClick={onEmptyMapClick} />
 
-        {/* Live surveillance detection polygons */}
+        {/* Live Surveillance Viewport Auto-Focus Controllers */}
+        {activeSection === 'Live Surveillance' && (
+          <FitToAoi bbox={targetAoi?.bbox ?? null} />
+        )}
+        <FitToScan scan={latestScan} />
+
+        {/* Interactive Bounding Box Drawer */}
+        <BoxDrawHandler isDrawing={isDrawingBox} onBoxDrawn={handleBoxDrawn} />
+
+        {/* Real-time Target Surveillance AOI Bounding Box on Map */}
+        {activeSection === 'Live Surveillance' && targetAoi && (
+          <RLPolygon
+            key={`target-aoi-${targetAoi.bbox.join('-')}`}
+            positions={[
+              [targetAoi.bbox[1], targetAoi.bbox[0]],
+              [targetAoi.bbox[1], targetAoi.bbox[2]],
+              [targetAoi.bbox[3], targetAoi.bbox[2]],
+              [targetAoi.bbox[3], targetAoi.bbox[0]],
+            ]}
+            pathOptions={{
+              color: '#FF6600',
+              weight: 2,
+              opacity: 0.85,
+              fillColor: '#FF6600',
+              fillOpacity: 0.08,
+              dashArray: '5 5',
+            }}
+          >
+            <RLTooltip direction="top" permanent>
+              <div className="font-mono text-[10px] text-[#FF6600] font-bold">
+                🎯 {targetAoi.label} [{targetAoi.bbox.join(', ')}]
+              </div>
+            </RLTooltip>
+          </RLPolygon>
+        )}
+
+        {/* Live surveillance detection polygons from Satellite AI Scan */}
         {latestScan?.spills?.map((detectedSpill, idx) => {
           const coords: [number, number][] = detectedSpill.spill_polygon_geojson.coordinates[0].map(
             ([lon, lat]: [number, number]) => [lat, lon] as [number, number]
@@ -295,11 +480,35 @@ export default function MapView({
         </div>
       </div>
 
+      {/* Drawing Mode floating instruction banner */}
+      {isDrawingBox && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[500] pointer-events-none bg-[#FF6600] text-black font-mono text-[11px] font-bold px-3 py-1 shadow-lg animate-bounce rounded-sm border border-black/20">
+          ✏️ CLICK & DRAG ON MAP TO DEFINE SURVEILLANCE BOUNDING BOX
+        </div>
+      )}
+
+      {/* Section 1: Live Surveillance Panel with Interactive Draw & AOI Sync */}
       {activeSection === 'Live Surveillance' && (
         <div className="pointer-events-none absolute left-3 top-16 z-[400]">
           <SurveillancePanel
             isLight={isLight}
             onScanComplete={(result) => setLatestScan(result)}
+            customBbox={customBbox}
+            onCustomBboxChange={setCustomBbox}
+            isDrawingBox={isDrawingBox}
+            onToggleDrawBox={() => setIsDrawingBox((b) => !b)}
+            onOpenHistory={() => onNavigateSection?.('Spill Analysis')}
+            onTargetAoiChange={(bbox, label) => setTargetAoi({ bbox, label })}
+          />
+        </div>
+      )}
+
+      {/* Section 2: Historical Spills & Incident Archive Panel */}
+      {activeSection === 'Spill Analysis' && (
+        <div className="pointer-events-none absolute left-3 top-16 z-[400]">
+          <HistoricalSpillsPanel
+            isLight={isLight}
+            onSelectSpill={(detail) => onSelectHistoricalSpill?.(detail)}
           />
         </div>
       )}

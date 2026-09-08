@@ -18,63 +18,129 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api", tags=["surveillance"])
 
 # ---------------------------------------------------------------------------
-# Predefined priority maritime surveillance zones across Indian Ocean & EEZ
+# Predefined priority maritime surveillance zones (Global Chokepoints & EEZ)
 # ---------------------------------------------------------------------------
 PRIORITY_ZONES = {
+    # Global Critical Chokepoints & International Tanker Corridors
+    "strait_of_hormuz": {
+        "label": "Strait of Hormuz",
+        "bbox": [56.10, 26.20, 56.65, 26.65],
+        "description": "Persian Gulf crude export artery (Global Chokepoint)",
+    },
+    "singapore_strait": {
+        "label": "Singapore & Malacca",
+        "bbox": [103.65, 1.15, 104.15, 1.45],
+        "description": "East Asia crude artery & busy anchorage (Global Chokepoint)",
+    },
+    "bab_el_mandeb": {
+        "label": "Bab-el-Mandeb (Red Sea)",
+        "bbox": [43.15, 12.50, 43.65, 13.00],
+        "description": "Southern entrance to Suez Canal (Global Chokepoint)",
+    },
+    "english_channel": {
+        "label": "Strait of Dover",
+        "bbox": [1.15, 50.85, 1.75, 51.25],
+        "description": "English Channel commercial shipping gateway (Europe)",
+    },
+    "gulf_of_mexico": {
+        "label": "Gulf of Mexico",
+        "bbox": [-90.40, 28.55, -89.80, 29.15],
+        "description": "Mississippi Canyon offshore crude platforms (Americas)",
+    },
+    "north_sea": {
+        "label": "North Sea (Brent Field)",
+        "bbox": [1.85, 56.20, 2.45, 56.80],
+        "description": "Northern European offshore drilling & tanker routes (Europe)",
+    },
+    "bosphorus_strait": {
+        "label": "Bosphorus Strait",
+        "bbox": [29.00, 41.10, 29.35, 41.35],
+        "description": "Black Sea & Mediterranean crude transit (Eurasia)",
+    },
+    "panama_approach": {
+        "label": "Panama Canal Approach",
+        "bbox": [-79.70, 8.70, -79.35, 9.10],
+        "description": "Pacific entrance to Panama Canal (Americas)",
+    },
+    "wakashio_mauritius": {
+        "label": "MV Wakashio Disaster (Mauritius 2020)",
+        "bbox": [57.65, -20.55, 57.85, -20.35],
+        "description": "Real 2020 bunker fuel spill in Pointe d'Esny lagoon (Ground Truth)",
+        "time_window": ("2020-08-05T00:00:00Z", "2020-08-15T23:59:59Z"),
+    },
+    "baniyas_syria": {
+        "label": "Baniyas Refinery Spill (Mediterranean 2021)",
+        "bbox": [35.70, 35.15, 36.00, 35.45],
+        "description": "Real 2021 fuel oil spill off Syrian coast / Cyprus (Ground Truth)",
+        "time_window": ("2021-08-25T00:00:00Z", "2021-08-31T23:59:59Z"),
+    },
+    "tobago_barge": {
+        "label": "Tobago Mystery Barge Spill (Caribbean 2024)",
+        "bbox": [-60.85, 11.10, -60.65, 11.25],
+        "description": "Real 2024 overturned barge bunker spill off southern Tobago (Ground Truth)",
+        "time_window": ("2024-02-07T00:00:00Z", "2024-02-14T23:59:59Z"),
+    },
+    "novorossiysk_cpc": {
+        "label": "CPC Marine Terminal Spill (Black Sea 2021)",
+        "bbox": [37.45, 44.55, 37.75, 44.75],
+        "description": "Real 2021 Caspian Pipeline tanker loading crude leak (Ground Truth)",
+        "time_window": ("2021-08-07T00:00:00Z", "2021-08-10T23:59:59Z"),
+    },
+    # Indian Ocean & Regional EEZ Strategic Zones
     "mumbai_high": {
         "label": "Mumbai High",
         "bbox": [71.25, 19.35, 71.55, 19.65],
-        "description": "Offshore oil platforms & western tanker lanes",
+        "description": "Offshore oil platforms & western tanker lanes (India)",
     },
     "gulf_of_kutch": {
         "label": "Gulf of Kutch",
         "bbox": [69.20, 22.30, 69.70, 22.70],
-        "description": "Jamnagar & Kandla crude import terminals",
+        "description": "Jamnagar & Kandla crude import terminals (India)",
     },
     "gulf_of_khambhat": {
         "label": "Gulf of Khambhat",
         "bbox": [72.10, 20.80, 72.70, 21.40],
-        "description": "Dahej & Hazira chemical / LNG corridor",
+        "description": "Dahej & Hazira chemical / LNG corridor (India)",
     },
     "goa_coast": {
         "label": "Goa & Konkan",
         "bbox": [73.40, 14.80, 73.90, 15.30],
-        "description": "Central western EEZ shipping route",
+        "description": "Central western EEZ shipping route (India)",
     },
     "cochin_lakshadweep": {
         "label": "Cochin / Lakshadweep",
         "bbox": [75.80, 9.70, 76.30, 10.20],
-        "description": "Southern crude route & Lakshadweep Sea",
+        "description": "Southern crude route & Lakshadweep Sea (India)",
     },
     "palk_strait": {
         "label": "Palk Strait",
         "bbox": [79.20, 9.00, 79.80, 9.50],
-        "description": "Indo-Sri Lanka maritime boundary",
+        "description": "Indo-Sri Lanka maritime boundary (South Asia)",
     },
     "chennai_port": {
         "label": "Chennai & Ennore",
         "bbox": [80.20, 13.00, 80.70, 13.50],
-        "description": "Eastern commercial & petroleum anchorage",
+        "description": "Eastern commercial & petroleum anchorage (India)",
     },
     "vizag_anchorage": {
         "label": "Visakhapatnam",
         "bbox": [83.20, 17.50, 83.70, 18.00],
-        "description": "Eastern naval command & port waters",
+        "description": "Eastern naval command & port waters (India)",
     },
     "paradip_dhamra": {
         "label": "Paradip & Dhamra",
         "bbox": [86.60, 20.10, 87.10, 20.60],
-        "description": "Northern Bay of Bengal bulk crude gateway",
+        "description": "Northern Bay of Bengal bulk crude gateway (India)",
     },
     "sundarbans_haldia": {
         "label": "Haldia & Sundarbans",
         "bbox": [87.90, 21.30, 88.50, 21.80],
-        "description": "Ganges Delta navigation channels",
+        "description": "Ganges Delta navigation channels (India/Bangladesh)",
     },
     "malacca_approach": {
         "label": "Great Nicobar (Malacca)",
         "bbox": [93.60, 6.40, 94.10, 6.90],
-        "description": "World's busiest crude tanker chokepoint",
+        "description": "World's busiest crude tanker chokepoint (Indian Ocean)",
     },
 }
 
@@ -108,6 +174,10 @@ class ScanRequest(BaseModel):
     zone: Optional[str] = None  # e.g. "mumbai_high"
     bbox: Optional[List[float]] = None  # [min_lon, min_lat, max_lon, max_lat]
     drill: Optional[bool] = False  # If true, simulate emergency spill incident drill
+    start_date: Optional[str] = None  # ISO date string or YYYY-MM-DD
+    end_date: Optional[str] = None  # ISO date string or YYYY-MM-DD
+    sensor: Optional[str] = "Sentinel-1 SAR"
+    cloud_cover: Optional[float] = 10.0
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +211,26 @@ def trigger_scan(req: ScanRequest):
     elif req.bbox:
         if len(req.bbox) != 4:
             raise HTTPException(status_code=400, detail="bbox must have exactly 4 values: [min_lon, min_lat, max_lon, max_lat]")
-        bbox = req.bbox
+        raw_w, raw_s, raw_e, raw_n = req.bbox
+        # Auto-sort coordinates in case user entered them inverted
+        min_lon = min(float(raw_w), float(raw_e))
+        max_lon = max(float(raw_w), float(raw_e))
+        min_lat = min(float(raw_s), float(raw_n))
+        max_lat = max(float(raw_s), float(raw_n))
+
+        if not (-180.0 <= min_lon <= 180.0 and -180.0 <= max_lon <= 180.0):
+            raise HTTPException(status_code=400, detail="Longitudes must be between -180 and 180 degrees.")
+        if not (-90.0 <= min_lat <= 90.0 and -90.0 <= max_lat <= 90.0):
+            raise HTTPException(status_code=400, detail="Latitudes must be between -90 and 90 degrees.")
+        if min_lon == max_lon or min_lat == max_lat:
+            raise HTTPException(status_code=400, detail="Bounding box area must be greater than 0.")
+        if (max_lon - min_lon) > 2.0 or (max_lat - min_lat) > 2.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"AOI span too large (width: {round(max_lon - min_lon, 2)}°, height: {round(max_lat - min_lat, 2)}°). Sentinel-1 SAR surveillance requires a bounding box span under 2.0° (approx 200 km)."
+            )
+
+        bbox = [round(min_lon, 4), round(min_lat, 4), round(max_lon, 4), round(max_lat, 4)]
     else:
         raise HTTPException(status_code=400, detail="Provide either 'zone' or 'bbox'")
 
@@ -165,6 +254,27 @@ def trigger_scan(req: ScanRequest):
         cmd.append("--drill")
     else:
         cmd.append("--live")
+
+    # Date window resolution (generic, data-driven)
+    from_date = req.start_date
+    to_date = req.end_date
+
+    # If user selected a predefined zone and didn't provide dates, use zone's default time_window if present
+    if req.zone and not from_date and not to_date:
+        zone_info = PRIORITY_ZONES.get(req.zone, {})
+        if "time_window" in zone_info:
+            from_date, to_date = zone_info["time_window"]
+
+    if from_date:
+        start_val = from_date
+        if len(start_val) == 10:
+            start_val = f"{start_val}T00:00:00Z"
+        cmd.extend(["--from-date", start_val])
+    if to_date:
+        end_val = to_date
+        if len(end_val) == 10:
+            end_val = f"{end_val}T23:59:59Z"
+        cmd.extend(["--to-date", end_val])
 
     try:
         result = subprocess.run(
@@ -201,18 +311,28 @@ def trigger_scan(req: ScanRequest):
         try:
             from app.queries.spills import insert_spill
             from app.schemas import SpillInput
+            from app.services.drift import process_new_spill
 
             for spill_data in summary["spills"]:
                 if not spill_data.get("spill_polygon_geojson"):
                     continue
+                c_lat = float(spill_data.get("centroid_lat") or 0.0)
+                c_lon = float(spill_data.get("centroid_lon") or 0.0)
+                det_at = spill_data.get("detected_at", summary.get("timestamp", ""))
                 spill_input = SpillInput(
-                    centroid_lat=spill_data.get("centroid_lat", 0.0),
-                    centroid_lon=spill_data.get("centroid_lon", 0.0),
-                    detected_at=spill_data.get("detected_at", summary.get("timestamp", "")),
+                    centroid_lat=c_lat,
+                    centroid_lon=c_lon,
+                    detected_at=det_at,
                     spill_polygon_geojson=spill_data["spill_polygon_geojson"],
                 )
                 spill_id = insert_spill(spill_input)
                 persisted_spill_ids.append(spill_id)
+
+                # Compute reverse-drift trajectory immediately
+                try:
+                    process_new_spill(spill_id, c_lat, c_lon, det_at)
+                except Exception as drift_err:
+                    print(f"Notice: Drift computation for spill {spill_id} failed: {drift_err}")
         except Exception as e:
             # Don't fail the scan if DB insert fails - still return detections
             summary["db_persist_error"] = str(e)
@@ -221,5 +341,10 @@ def trigger_scan(req: ScanRequest):
     summary["zone"] = zone_label
     summary["zone_key"] = req.zone or "custom"
     summary["persisted_spill_ids"] = persisted_spill_ids
+    summary["sensor"] = req.sensor or "Sentinel-1 SAR"
+    summary["time_window"] = {
+        "start": req.start_date or "latest_pass",
+        "end": req.end_date or "now",
+    }
 
     return summary
