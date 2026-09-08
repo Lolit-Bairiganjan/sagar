@@ -23,7 +23,57 @@ export interface ZoneConfig {
   description: string;
 }
 
-export const INDIAN_OCEAN_ZONES: ZoneConfig[] = [
+export const STRATEGIC_ZONES: ZoneConfig[] = [
+  // Global Critical Chokepoints & International Tanker Corridors
+  {
+    key: 'strait_of_hormuz',
+    label: 'Strait of Hormuz (Persian Gulf)',
+    bbox: [56.10, 26.20, 56.65, 26.65],
+    description: "Persian Gulf crude export artery (Global Chokepoint)",
+  },
+  {
+    key: 'singapore_strait',
+    label: 'Singapore & Malacca Strait',
+    bbox: [103.65, 1.15, 104.15, 1.45],
+    description: 'East Asia crude artery & busy anchorage (Global Chokepoint)',
+  },
+  {
+    key: 'bab_el_mandeb',
+    label: 'Bab-el-Mandeb & Red Sea',
+    bbox: [43.15, 12.50, 43.65, 13.00],
+    description: 'Southern entrance to Suez Canal (Global Chokepoint)',
+  },
+  {
+    key: 'english_channel',
+    label: 'Strait of Dover (English Channel)',
+    bbox: [1.15, 50.85, 1.75, 51.25],
+    description: 'Busiest commercial shipping gateway in Europe',
+  },
+  {
+    key: 'gulf_of_mexico',
+    label: 'Gulf of Mexico (Mississippi Canyon)',
+    bbox: [-90.40, 28.55, -89.80, 29.15],
+    description: 'Major offshore crude platforms & US Gulf tanker lanes',
+  },
+  {
+    key: 'north_sea',
+    label: 'North Sea (Brent Petroleum Field)',
+    bbox: [1.85, 56.20, 2.45, 56.80],
+    description: 'Northern European offshore drilling & tanker routes',
+  },
+  {
+    key: 'bosphorus_strait',
+    label: 'Bosphorus Strait (Black Sea)',
+    bbox: [29.00, 41.10, 29.35, 41.35],
+    description: 'Black Sea & Mediterranean crude corridor (Eurasia)',
+  },
+  {
+    key: 'panama_approach',
+    label: 'Panama Canal Approach (Pacific)',
+    bbox: [-79.70, 8.70, -79.35, 9.10],
+    description: 'Pacific entrance to Panama Canal (Americas)',
+  },
+  // Indian Ocean & Regional Strategic EEZ Zones
   {
     key: 'mumbai_high',
     label: 'Mumbai High Offshore',
@@ -73,7 +123,7 @@ export const INDIAN_OCEAN_ZONES: ZoneConfig[] = [
     description: 'Eastern Naval Command & refinery terminal',
   },
   {
-    key: 'paradip_port',
+    key: 'paradip_dhamra',
     label: 'Paradip & Dhamra (Bay of Bengal)',
     bbox: [86.60, 20.10, 87.10, 20.60],
     description: 'Major bulk crude & ore carrier gateway',
@@ -91,6 +141,8 @@ export const INDIAN_OCEAN_ZONES: ZoneConfig[] = [
     description: "World's busiest crude tanker chokepoint",
   },
 ];
+
+export const INDIAN_OCEAN_ZONES = STRATEGIC_ZONES;
 
 interface SurveillancePanelProps {
   isLight?: boolean;
@@ -208,7 +260,7 @@ export default function SurveillancePanel({
                     : 'text-[#8E95A5] hover:text-white'
                 }`}
               >
-                11 Zones
+                {STRATEGIC_ZONES.length} Zones
               </button>
               <button
                 onClick={() => setMode('custom')}
@@ -246,11 +298,11 @@ export default function SurveillancePanel({
             exit={{ opacity: 0, height: 0 }}
             className="flex flex-col gap-2 p-3 overflow-hidden"
           >
-            {/* Mode 1: Strategic Indian Ocean Zones Selector */}
+            {/* Mode 1: Global & Regional Strategic Zones Selector */}
             {mode === 'preset' ? (
               <div className="flex flex-col gap-1">
                 <label className="text-[9px] font-mono uppercase text-[#8E95A5] flex items-center gap-1">
-                  <Globe size={10} className="text-[#FF6600]" /> Indian Ocean Strategic Zones:
+                  <Globe size={10} className="text-[#FF6600]" /> Global & Strategic Maritime Zones:
                 </label>
                 <select
                   value={selectedZoneKey}

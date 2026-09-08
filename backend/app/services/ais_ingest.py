@@ -23,9 +23,25 @@ load_dotenv()
 API_KEY = os.getenv("AISSTREAM_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# AisStream Indian Ocean bounding box: [[lat_max, lon_min], [lat_min, lon_max]]
-# Covers Arabian Sea, Bay of Bengal, and Malacca approaches [26°N, 50°E] to [0°N, 100°E]
-INDIAN_OCEAN_BBOX = [[[26.0, 50.0], [0.0, 100.0]]]
+# AisStream Bounding Boxes: [[lat_max, lon_min], [lat_min, lon_max]]
+AIS_REGION = os.getenv("AIS_REGION", "global").lower()
+
+REGIONS = {
+    # Worldwide global ocean surveillance
+    "global": [[[90.0, -180.0], [-90.0, 180.0]]],
+    # Critical global tanker chokepoints
+    "chokepoints": [
+        [[26.0, 50.0], [0.0, 100.0]],       # Indian Ocean, Arabian Sea & Malacca
+        [[27.0, 55.0], [25.0, 57.0]],       # Strait of Hormuz
+        [[52.0, 0.5], [50.0, 2.5]],         # English Channel / Strait of Dover
+        [[30.0, -91.0], [27.0, -88.0]],     # Gulf of Mexico
+        [[15.0, 42.0], [11.0, 45.0]],       # Bab-el-Mandeb & Red Sea
+    ],
+    # Indian Ocean & EEZ priority waters
+    "indian_ocean": [[[26.0, 50.0], [0.0, 100.0]]],
+}
+
+ACTIVE_BBOX = REGIONS.get(AIS_REGION, REGIONS["global"])
 
 
 def get_db_connection():
@@ -44,7 +60,7 @@ async def run_ais_ingestion():
     print("=================================================================", flush=True)
     print("  SAGAR REAL-TIME AIS VESSEL INGESTION SERVICE", flush=True)
     print("=================================================================", flush=True)
-    print(f"[*] Target Region : Indian Ocean [26°N, 50°E] to [0°N, 100°E]", flush=True)
+    print(f"[*] Target Region : {AIS_REGION.upper()} ({len(ACTIVE_BBOX)} bounding zone(s))", flush=True)
     print(f"[*] Database Host : {DATABASE_URL.split('@')[-1] if DATABASE_URL else 'Not set'}", flush=True)
 
     while True:
@@ -61,11 +77,11 @@ async def run_ais_ingestion():
             ) as ws:
                 subscribe_msg = {
                     "APIKey": API_KEY,
-                    "BoundingBoxes": INDIAN_OCEAN_BBOX,
+                    "BoundingBoxes": ACTIVE_BBOX,
                     "FilterMessageTypes": ["PositionReport", "ShipStaticData"],
                 }
                 await ws.send(json.dumps(subscribe_msg))
-                print("[+] Connected to AisStream! Streaming live Indian Ocean ships...", flush=True)
+                print(f"[+] Connected to AisStream! Streaming live {AIS_REGION.upper()} ships...", flush=True)
 
                 msg_count = 0
                 async for raw_message in ws:

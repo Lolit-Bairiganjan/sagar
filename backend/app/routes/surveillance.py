@@ -18,63 +18,105 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api", tags=["surveillance"])
 
 # ---------------------------------------------------------------------------
-# Predefined priority maritime surveillance zones across Indian Ocean & EEZ
+# Predefined priority maritime surveillance zones (Global Chokepoints & EEZ)
 # ---------------------------------------------------------------------------
 PRIORITY_ZONES = {
+    # Global Critical Chokepoints & International Tanker Corridors
+    "strait_of_hormuz": {
+        "label": "Strait of Hormuz",
+        "bbox": [56.10, 26.20, 56.65, 26.65],
+        "description": "Persian Gulf crude export artery (Global Chokepoint)",
+    },
+    "singapore_strait": {
+        "label": "Singapore & Malacca",
+        "bbox": [103.65, 1.15, 104.15, 1.45],
+        "description": "East Asia crude artery & busy anchorage (Global Chokepoint)",
+    },
+    "bab_el_mandeb": {
+        "label": "Bab-el-Mandeb (Red Sea)",
+        "bbox": [43.15, 12.50, 43.65, 13.00],
+        "description": "Southern entrance to Suez Canal (Global Chokepoint)",
+    },
+    "english_channel": {
+        "label": "Strait of Dover",
+        "bbox": [1.15, 50.85, 1.75, 51.25],
+        "description": "English Channel commercial shipping gateway (Europe)",
+    },
+    "gulf_of_mexico": {
+        "label": "Gulf of Mexico",
+        "bbox": [-90.40, 28.55, -89.80, 29.15],
+        "description": "Mississippi Canyon offshore crude platforms (Americas)",
+    },
+    "north_sea": {
+        "label": "North Sea (Brent Field)",
+        "bbox": [1.85, 56.20, 2.45, 56.80],
+        "description": "Northern European offshore drilling & tanker routes (Europe)",
+    },
+    "bosphorus_strait": {
+        "label": "Bosphorus Strait",
+        "bbox": [29.00, 41.10, 29.35, 41.35],
+        "description": "Black Sea & Mediterranean crude transit (Eurasia)",
+    },
+    "panama_approach": {
+        "label": "Panama Canal Approach",
+        "bbox": [-79.70, 8.70, -79.35, 9.10],
+        "description": "Pacific entrance to Panama Canal (Americas)",
+    },
+    # Indian Ocean & Regional EEZ Strategic Zones
     "mumbai_high": {
         "label": "Mumbai High",
         "bbox": [71.25, 19.35, 71.55, 19.65],
-        "description": "Offshore oil platforms & western tanker lanes",
+        "description": "Offshore oil platforms & western tanker lanes (India)",
     },
     "gulf_of_kutch": {
         "label": "Gulf of Kutch",
         "bbox": [69.20, 22.30, 69.70, 22.70],
-        "description": "Jamnagar & Kandla crude import terminals",
+        "description": "Jamnagar & Kandla crude import terminals (India)",
     },
     "gulf_of_khambhat": {
         "label": "Gulf of Khambhat",
         "bbox": [72.10, 20.80, 72.70, 21.40],
-        "description": "Dahej & Hazira chemical / LNG corridor",
+        "description": "Dahej & Hazira chemical / LNG corridor (India)",
     },
     "goa_coast": {
         "label": "Goa & Konkan",
         "bbox": [73.40, 14.80, 73.90, 15.30],
-        "description": "Central western EEZ shipping route",
+        "description": "Central western EEZ shipping route (India)",
     },
     "cochin_lakshadweep": {
         "label": "Cochin / Lakshadweep",
         "bbox": [75.80, 9.70, 76.30, 10.20],
-        "description": "Southern crude route & Lakshadweep Sea",
+        "description": "Southern crude route & Lakshadweep Sea (India)",
     },
     "palk_strait": {
         "label": "Palk Strait",
         "bbox": [79.20, 9.00, 79.80, 9.50],
-        "description": "Indo-Sri Lanka maritime boundary",
+        "description": "Indo-Sri Lanka maritime boundary (South Asia)",
     },
     "chennai_port": {
         "label": "Chennai & Ennore",
         "bbox": [80.20, 13.00, 80.70, 13.50],
-        "description": "Eastern commercial & petroleum anchorage",
+        "description": "Eastern commercial & petroleum anchorage (India)",
     },
     "vizag_anchorage": {
         "label": "Visakhapatnam",
         "bbox": [83.20, 17.50, 83.70, 18.00],
-        "description": "Eastern naval command & port waters",
+        "description": "Eastern naval command & port waters (India)",
     },
     "paradip_dhamra": {
         "label": "Paradip & Dhamra",
         "bbox": [86.60, 20.10, 87.10, 20.60],
-        "description": "Northern Bay of Bengal bulk crude gateway",
+        "description": "Northern Bay of Bengal bulk crude gateway (India)",
     },
     "sundarbans_haldia": {
         "label": "Haldia & Sundarbans",
         "bbox": [87.90, 21.30, 88.50, 21.80],
-        "description": "Ganges Delta navigation channels",
+        "description": "Ganges Delta navigation channels (India/Bangladesh)",
     },
     "malacca_approach": {
         "label": "Great Nicobar (Malacca)",
         "bbox": [93.60, 6.40, 94.10, 6.90],
-        "description": "World's busiest crude tanker chokepoint",
+        "description": "World's busiest crude tanker chokepoint (Indian Ocean)",
     },
 }
 
