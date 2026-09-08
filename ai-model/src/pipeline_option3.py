@@ -104,6 +104,17 @@ def run_option3_pipeline(
 
         # ─── Step 2: Tiling & Normalization ──────────────────────────────────────
         step2_start = time.time()
+        is_empty_scene = False
+        try:
+            import rasterio
+            with rasterio.open(scene_path) as chk_src:
+                chk_b1 = chk_src.read(1)
+                if np.count_nonzero(np.isfinite(chk_b1)) == 0:
+                    is_empty_scene = True
+                    print("      [!] WARNING: Scene contains no valid radar data (all NaNs). The satellite did not acquire data here in this time window.")
+        except Exception:
+            pass
+
         print("\n[2/4] Normalizing backscatter (P2/P98) & slicing into 416x416 tiles...")
         tiles = slice_geotiff_into_tiles(scene_path, tile_size=416)
         print(f"      Generated {len(tiles)} candidate tiles in {time.time() - step2_start:.2f}s")
@@ -140,6 +151,8 @@ def run_option3_pipeline(
         "pipeline_latency_seconds": round(time.time() - start_time, 2),
         "spills": all_detected_spills
     }
+    if not drill and 'is_empty_scene' in locals() and is_empty_scene:
+        summary["warning"] = "No satellite acquisitions found for this date range in the Sentinel-1 archive (empty scene)."
 
     print("\n[4/4] Pipeline Execution Summary:")
     print(f"      Status                 : {summary['status']}")

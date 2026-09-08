@@ -583,6 +583,16 @@ export default function SurveillancePanel({
                   />
                 </div>
               </div>
+
+              {/* Warning if date precedes Sentinel-1 constellation launch (Oct 2014) */}
+              {timePreset !== 'latest' && startDate && startDate < '2014-10-01' && (
+                <div className="flex items-start gap-1 p-1.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300 font-mono text-[8px] leading-tight">
+                  <AlertTriangle size={11} className="shrink-0 mt-0.5 text-amber-400" />
+                  <span>
+                    Sentinel-1 SAR was launched in 2014. Dates prior to Oct 2014 return empty (NaN) rasters from the Copernicus satellite archive.
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* ─── Sensor & Optical Cloud Cover Filter (Future-Proofing) ─── */}
