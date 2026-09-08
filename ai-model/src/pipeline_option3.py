@@ -35,6 +35,8 @@ def run_option3_pipeline(
     conf_threshold: float = 0.25,
     use_live_cdse: bool = False,
     drill: bool = False,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     post_to_backend_url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -84,6 +86,8 @@ def run_option3_pipeline(
             scene_path = client.fetch_calibrated_geotiff(
                 bbox=bbox,
                 output_path=output_geotiff,
+                from_date=from_date,
+                to_date=to_date,
                 width=832,
                 height=832
             )
@@ -191,6 +195,8 @@ def main():
     parser.add_argument("--drill", action="store_true", help="Run simulated emergency spill incident drill")
     parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold")
     parser.add_argument("--model", type=str, default="ai-model/weight/best.onnx", help="Path to ONNX weights")
+    parser.add_argument("--from-date", type=str, default=None, help="Start observation date (ISO 8601 or YYYY-MM-DD)")
+    parser.add_argument("--to-date", type=str, default=None, help="End observation date (ISO 8601 or YYYY-MM-DD)")
     parser.add_argument("--post", type=str, default=None, help="Backend URL to post detections")
 
     args = parser.parse_args()
@@ -200,6 +206,8 @@ def main():
         conf_threshold=args.conf,
         use_live_cdse=args.live,
         drill=args.drill,
+        from_date=getattr(args, "from_date", None),
+        to_date=getattr(args, "to_date", None),
         post_to_backend_url=args.post
     )
 

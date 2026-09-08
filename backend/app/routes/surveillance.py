@@ -150,6 +150,10 @@ class ScanRequest(BaseModel):
     zone: Optional[str] = None  # e.g. "mumbai_high"
     bbox: Optional[List[float]] = None  # [min_lon, min_lat, max_lon, max_lat]
     drill: Optional[bool] = False  # If true, simulate emergency spill incident drill
+    start_date: Optional[str] = None  # ISO date string or YYYY-MM-DD
+    end_date: Optional[str] = None  # ISO date string or YYYY-MM-DD
+    sensor: Optional[str] = "Sentinel-1 SAR"
+    cloud_cover: Optional[float] = 10.0
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +231,11 @@ def trigger_scan(req: ScanRequest):
     else:
         cmd.append("--live")
 
+    if req.start_date:
+        cmd.extend(["--from-date", req.start_date])
+    if req.end_date:
+        cmd.extend(["--to-date", req.end_date])
+
     try:
         result = subprocess.run(
             cmd,
@@ -262,18 +271,28 @@ def trigger_scan(req: ScanRequest):
         try:
             from app.queries.spills import insert_spill
             from app.schemas import SpillInput
+            from app.services.drift import process_new_spill
 
             for spill_data in summary["spills"]:
                 if not spill_data.get("spill_polygon_geojson"):
                     continue
+                c_lat = float(spill_data.get("centroid_lat") or 0.0)
+                c_lon = float(spill_data.get("centroid_lon") or 0.0)
+                det_at = spill_data.get("detected_at", summary.get("timestamp", ""))
                 spill_input = SpillInput(
-                    centroid_lat=spill_data.get("centroid_lat", 0.0),
-                    centroid_lon=spill_data.get("centroid_lon", 0.0),
-                    detected_at=spill_data.get("detected_at", summary.get("timestamp", "")),
+                    centroid_lat=c_lat,
+                    centroid_lon=c_lon,
+                    detected_at=det_at,
                     spill_polygon_geojson=spill_data["spill_polygon_geojson"],
                 )
                 spill_id = insert_spill(spill_input)
                 persisted_spill_ids.append(spill_id)
+
+                # Compute reverse-drift trajectory immediately
+                try:
+                    process_new_spill(spill_id, c_lat, c_lon, det_at)
+                except Exception as drift_err:
+                    print(f"Notice: Drift computation for spill {spill_id} failed: {drift_err}")
         except Exception as e:
             # Don't fail the scan if DB insert fails - still return detections
             summary["db_persist_error"] = str(e)
@@ -282,5 +301,10 @@ def trigger_scan(req: ScanRequest):
     summary["zone"] = zone_label
     summary["zone_key"] = req.zone or "custom"
     summary["persisted_spill_ids"] = persisted_spill_ids
+    summary["sensor"] = req.sensor or "Sentinel-1 SAR"
+    summary["time_window"] = {
+        "start": req.start_date or "latest_pass",
+        "end": req.end_date or "now",
+    }
 
     return summary

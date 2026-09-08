@@ -8,6 +8,9 @@ import type {
   Investigation,
   SystemStatus,
   SurveillanceScanResult,
+  SurveillanceScanParams,
+  HistoricalSpillSummary,
+  HistoricalSpillDetail,
   LatLng,
 } from '../types';
 
@@ -419,7 +422,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 // ---------------------------------------------------------------------------
 
 export async function triggerSurveillanceScan(
-  params: { zone?: string; bbox?: [number, number, number, number]; drill?: boolean } | string,
+  params: SurveillanceScanParams | string,
   drill: boolean = false,
 ): Promise<SurveillanceScanResult> {
   const payload = typeof params === 'string' ? { zone: params, drill } : params;
@@ -431,3 +434,30 @@ export async function triggerSurveillanceScan(
   );
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Historical Spills & Incident Archive API
+// ---------------------------------------------------------------------------
+
+export async function getHistoricalSpills(
+  limit: number = 50,
+): Promise<{ spills: HistoricalSpillSummary[]; total: number }> {
+  try {
+    const { data } = await apiClient.get<{ spills: HistoricalSpillSummary[]; total: number }>(
+      '/spills',
+      { params: { limit } },
+    );
+    return data;
+  } catch (err) {
+    console.warn('Failed to load historical spills from backend:', err);
+    return { spills: [], total: 0 };
+  }
+}
+
+export async function getHistoricalSpillDetail(
+  spillId: number,
+): Promise<HistoricalSpillDetail> {
+  const { data } = await apiClient.get<HistoricalSpillDetail>(`/spills/${spillId}`);
+  return data;
+}
+
