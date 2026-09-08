@@ -134,8 +134,17 @@ export default function SurveillancePanel({
         if (nums.some(isNaN)) {
           throw new Error('Please enter valid numeric coordinates for [minLon, minLat, maxLon, maxLat]');
         }
+        const minLon = Math.min(nums[0], nums[2]);
+        const maxLon = Math.max(nums[0], nums[2]);
+        const minLat = Math.min(nums[1], nums[3]);
+        const maxLat = Math.max(nums[1], nums[3]);
+
+        if (minLon === maxLon || minLat === maxLat) {
+          throw new Error('Bounding box must have a non-zero width and height');
+        }
+
         payload = {
-          bbox: [nums[0], nums[1], nums[2], nums[3]],
+          bbox: [minLon, minLat, maxLon, maxLat],
           drill: isDrill,
         };
       }

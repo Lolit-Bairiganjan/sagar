@@ -141,7 +141,21 @@ def trigger_scan(req: ScanRequest):
     elif req.bbox:
         if len(req.bbox) != 4:
             raise HTTPException(status_code=400, detail="bbox must have exactly 4 values: [min_lon, min_lat, max_lon, max_lat]")
-        bbox = req.bbox
+        raw_w, raw_s, raw_e, raw_n = req.bbox
+        # Auto-sort coordinates in case user entered them inverted
+        min_lon = min(float(raw_w), float(raw_e))
+        max_lon = max(float(raw_w), float(raw_e))
+        min_lat = min(float(raw_s), float(raw_n))
+        max_lat = max(float(raw_s), float(raw_n))
+
+        if not (-180.0 <= min_lon <= 180.0 and -180.0 <= max_lon <= 180.0):
+            raise HTTPException(status_code=400, detail="Longitudes must be between -180 and 180 degrees.")
+        if not (-90.0 <= min_lat <= 90.0 and -90.0 <= max_lat <= 90.0):
+            raise HTTPException(status_code=400, detail="Latitudes must be between -90 and 90 degrees.")
+        if min_lon == max_lon or min_lat == max_lat:
+            raise HTTPException(status_code=400, detail="Bounding box area must be greater than 0.")
+
+        bbox = [round(min_lon, 4), round(min_lat, 4), round(max_lon, 4), round(max_lat, 4)]
     else:
         raise HTTPException(status_code=400, detail="Provide either 'zone' or 'bbox'")
 

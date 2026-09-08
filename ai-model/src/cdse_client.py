@@ -6,6 +6,8 @@ from ESA's cloud GPUs, eliminating the need for 1.5 GB .SAFE downloads and ESA S
 """
 
 import os
+import sys
+import time
 import json
 import requests
 import numpy as np
