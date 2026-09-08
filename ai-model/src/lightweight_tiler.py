@@ -86,10 +86,12 @@ def slice_geotiff_into_tiles(geotiff_path: str, tile_size: int = TILE_SIZE) -> L
                 tile_affine = window_transform(win, src_transform)
 
                 # Initialize padded (3, 416, 416) tensor
+                # Note: The YOLOv8 model is trained on 3-channel grayscale SAR amplitude (VV replicated across RGB)
                 tile_tensor = np.zeros((3, tile_size, tile_size), dtype=np.float32)
-                tile_tensor[0, :w_height, :w_width] = vv_norm[y:y + w_height, x:x + w_width]
-                tile_tensor[1, :w_height, :w_width] = vh_norm[y:y + w_height, x:x + w_width]
-                tile_tensor[2, :w_height, :w_width] = diff_norm[y:y + w_height, x:x + w_width]
+                vv_crop = vv_norm[y:y + w_height, x:x + w_width]
+                tile_tensor[0, :w_height, :w_width] = vv_crop
+                tile_tensor[1, :w_height, :w_width] = vv_crop
+                tile_tensor[2, :w_height, :w_width] = vv_crop
 
                 tiles.append(TileItem(
                     tensor=tile_tensor,

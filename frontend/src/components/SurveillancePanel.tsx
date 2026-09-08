@@ -30,6 +30,13 @@ export interface ZoneConfig {
 }
 
 export const STRATEGIC_ZONES: ZoneConfig[] = [
+  // Historical Ground Truth Incident (Real Sentinel-1 SAR Oil Slick)
+  {
+    key: 'wakashio_mauritius',
+    label: 'MV Wakashio Spill (Mauritius 2020)',
+    bbox: [57.65, -20.55, 57.85, -20.35],
+    description: 'Real 2020 bunker fuel spill in Pointe d\'Esny lagoon (Ground Truth)',
+  },
   // Global Critical Chokepoints & International Tanker Corridors
   {
     key: 'strait_of_hormuz',
@@ -430,7 +437,13 @@ export default function SurveillancePanel({
                   value={selectedZoneKey}
                   onChange={(e) => {
                     soundEngine.playBubbleHover();
-                    setSelectedZoneKey(e.target.value);
+                    const newKey = e.target.value;
+                    setSelectedZoneKey(newKey);
+                    if (newKey === 'wakashio_mauritius') {
+                      setStartDate('2020-08-05');
+                      setEndDate('2020-08-15');
+                      setTimePreset('custom');
+                    }
                   }}
                   className={`border px-2 py-1.5 text-[11px] font-mono font-semibold rounded cursor-pointer outline-none transition-colors ${
                     isLight

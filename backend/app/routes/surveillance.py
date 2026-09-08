@@ -62,6 +62,11 @@ PRIORITY_ZONES = {
         "bbox": [-79.70, 8.70, -79.35, 9.10],
         "description": "Pacific entrance to Panama Canal (Americas)",
     },
+    "wakashio_mauritius": {
+        "label": "MV Wakashio Disaster (Mauritius 2020)",
+        "bbox": [57.65, -20.55, 57.85, -20.35],
+        "description": "Real 2020 bunker fuel spill in Pointe d'Esny lagoon (Ground Truth)",
+    },
     # Indian Ocean & Regional EEZ Strategic Zones
     "mumbai_high": {
         "label": "Mumbai High",
@@ -231,16 +236,19 @@ def trigger_scan(req: ScanRequest):
     else:
         cmd.append("--live")
 
-    if req.start_date:
-        start_val = req.start_date
-        if len(start_val) == 10:
-            start_val = f"{start_val}T00:00:00Z"
-        cmd.extend(["--from-date", start_val])
-    if req.end_date:
-        end_val = req.end_date
-        if len(end_val) == 10:
-            end_val = f"{end_val}T23:59:59Z"
-        cmd.extend(["--to-date", end_val])
+    if req.zone == "wakashio_mauritius" and not req.start_date:
+        cmd.extend(["--from-date", "2020-08-05T00:00:00Z", "--to-date", "2020-08-15T23:59:59Z"])
+    else:
+        if req.start_date:
+            start_val = req.start_date
+            if len(start_val) == 10:
+                start_val = f"{start_val}T00:00:00Z"
+            cmd.extend(["--from-date", start_val])
+        if req.end_date:
+            end_val = req.end_date
+            if len(end_val) == 10:
+                end_val = f"{end_val}T23:59:59Z"
+            cmd.extend(["--to-date", end_val])
 
     try:
         result = subprocess.run(
