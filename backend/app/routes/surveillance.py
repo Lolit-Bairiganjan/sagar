@@ -154,6 +154,11 @@ def trigger_scan(req: ScanRequest):
             raise HTTPException(status_code=400, detail="Latitudes must be between -90 and 90 degrees.")
         if min_lon == max_lon or min_lat == max_lat:
             raise HTTPException(status_code=400, detail="Bounding box area must be greater than 0.")
+        if (max_lon - min_lon) > 2.0 or (max_lat - min_lat) > 2.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"AOI span too large (width: {round(max_lon - min_lon, 2)}°, height: {round(max_lat - min_lat, 2)}°). Sentinel-1 SAR surveillance requires a bounding box span under 2.0° (approx 200 km)."
+            )
 
         bbox = [round(min_lon, 4), round(min_lat, 4), round(max_lon, 4), round(max_lat, 4)]
     else:

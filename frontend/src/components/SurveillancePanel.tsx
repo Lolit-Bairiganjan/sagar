@@ -142,6 +142,11 @@ export default function SurveillancePanel({
         if (minLon === maxLon || minLat === maxLat) {
           throw new Error('Bounding box must have a non-zero width and height');
         }
+        if (maxLon - minLon > 2.0 || maxLat - minLat > 2.0) {
+          throw new Error(
+            `AOI span too large (${(maxLon - minLon).toFixed(1)}° × ${(maxLat - minLat).toFixed(1)}°). Sentinel-1 SAR requires an area under 2.0° (approx 200 km).`
+          );
+        }
 
         payload = {
           bbox: [minLon, minLat, maxLon, maxLat],

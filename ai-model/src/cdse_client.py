@@ -151,13 +151,22 @@ class CopernicusCDSEClient:
         for attempt in range(1, 4):
             try:
                 response = requests.post(CDSE_PROCESS_URL, json=payload, headers=headers, timeout=50)
-                response.raise_for_status()
+                if not response.ok:
+                    try:
+                        err_json = response.json()
+                        err_msg = err_json.get("error", {}).get("message", response.text)
+                    except Exception:
+                        err_msg = response.text
+                    raise RuntimeError(f"Copernicus API ({response.status_code}): {err_msg}")
                 os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
                 with open(output_path, "wb") as f:
                     f.write(response.content)
                 return output_path
             except Exception as e:
                 last_err = e
+                # Don't retry on client 400 Bad Request (invalid coordinates/resolution)
+                if isinstance(e, RuntimeError) and "Copernicus API (400)" in str(e):
+                    raise
                 time.sleep(1.5 * attempt)
 
         raise last_err
