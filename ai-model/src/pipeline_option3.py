@@ -32,9 +32,11 @@ def run_option3_pipeline(
     bbox: Tuple[float, float, float, float] = (71.25, 19.35, 71.55, 19.65),
     output_geotiff: str = "ai-model/outputs/option3_scene.tif",
     onnx_model_path: str = "ai-model/weight/best.onnx",
-    conf_threshold: float = 0.25,
+    conf_threshold: float = 0.20,
     use_live_cdse: bool = False,
     drill: bool = False,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     post_to_backend_url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -57,9 +59,9 @@ def run_option3_pipeline(
         from rasterio.windows import Window
         from lightweight_tiler import TileItem
 
-        sample_path = "ai-model/data/images/train/class_0_00041.jpg"
+        sample_path = "ai-model/data/images/train/class_1_00004.jpg"
         if not os.path.exists(sample_path):
-            sample_path = os.path.join(os.path.dirname(__file__), "..", "data", "images", "train", "class_0_00041.jpg")
+            sample_path = os.path.join(os.path.dirname(__file__), "..", "data", "images", "train", "class_1_00004.jpg")
 
         img = cv2.imread(sample_path)
         img = cv2.resize(img, (416, 416))
@@ -84,6 +86,8 @@ def run_option3_pipeline(
             scene_path = client.fetch_calibrated_geotiff(
                 bbox=bbox,
                 output_path=output_geotiff,
+                from_date=from_date,
+                to_date=to_date,
                 width=832,
                 height=832
             )
@@ -100,6 +104,17 @@ def run_option3_pipeline(
 
         # ─── Step 2: Tiling & Normalization ──────────────────────────────────────
         step2_start = time.time()
+        is_empty_scene = False
+        try:
+            import rasterio
+            with rasterio.open(scene_path) as chk_src:
+                chk_b1 = chk_src.read(1)
+                if np.count_nonzero(np.isfinite(chk_b1)) == 0:
+                    is_empty_scene = True
+                    print("      [!] WARNING: Scene contains no valid radar data (all NaNs). The satellite did not acquire data here in this time window.")
+        except Exception:
+            pass
+
         print("\n[2/4] Normalizing backscatter (P2/P98) & slicing into 416x416 tiles...")
         tiles = slice_geotiff_into_tiles(scene_path, tile_size=416)
         print(f"      Generated {len(tiles)} candidate tiles in {time.time() - step2_start:.2f}s")
@@ -136,6 +151,8 @@ def run_option3_pipeline(
         "pipeline_latency_seconds": round(time.time() - start_time, 2),
         "spills": all_detected_spills
     }
+    if not drill and 'is_empty_scene' in locals() and is_empty_scene:
+        summary["warning"] = "No satellite acquisitions found for this date range in the Sentinel-1 archive (empty scene)."
 
     print("\n[4/4] Pipeline Execution Summary:")
     print(f"      Status                 : {summary['status']}")
@@ -156,26 +173,34 @@ def run_option3_pipeline(
     # Save a human-viewable preview image for visual verification
     try:
         import cv2
-        import rasterio
-        target_tif = output_geotiff if os.path.exists(output_geotiff) else None
-        if target_tif and os.path.exists(target_tif):
-            with rasterio.open(target_tif) as src:
-                b1 = src.read(1)
-                valid = b1[np.isfinite(b1)]
-                if len(valid) > 0:
-                    p2, p98 = np.percentile(valid, (2, 98))
-                    b1_clean = np.nan_to_num(b1, nan=p2)
-                    b1_norm = np.clip((b1_clean - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                else:
-                    b1_norm = np.zeros(b1.shape, dtype=np.uint8)
-
-                preview_bgr = cv2.cvtColor(b1_norm, cv2.COLOR_GRAY2BGR)
-                status_color = (0, 255, 0) if summary['status'] == 'ZONE_CLEAN' else (0, 0, 255)
-                cv2.putText(preview_bgr, f"Sentinel-1 SAR: {summary['status']}", (15, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-                preview_path = "ai-model/outputs/latest_sar_preview.jpg"
-                cv2.imwrite(preview_path, preview_bgr)
+        preview_path = "ai-model/outputs/latest_sar_preview.jpg"
+        if drill:
+            sample_preview = cv2.imread("ai-model/data/images/train/class_1_00004.jpg")
+            if sample_preview is not None:
+                cv2.putText(sample_preview, f"Sentinel-1 SAR: ANOMALY DETECTED ({len(all_detected_spills)} slicks)", (15, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                cv2.imwrite(preview_path, sample_preview)
                 print(f"      Visual radar inspection image saved: {preview_path}")
+        else:
+            import rasterio
+            target_tif = output_geotiff if os.path.exists(output_geotiff) else None
+            if target_tif and os.path.exists(target_tif):
+                with rasterio.open(target_tif) as src:
+                    b1 = src.read(1)
+                    valid = b1[np.isfinite(b1)]
+                    if len(valid) > 0:
+                        p2, p98 = np.percentile(valid, (2, 98))
+                        b1_clean = np.nan_to_num(b1, nan=p2)
+                        b1_norm = np.clip((b1_clean - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                    else:
+                        b1_norm = np.zeros(b1.shape, dtype=np.uint8)
+
+                    preview_bgr = cv2.cvtColor(b1_norm, cv2.COLOR_GRAY2BGR)
+                    status_color = (0, 255, 0) if summary['status'] == 'ZONE_CLEAN' else (0, 0, 255)
+                    cv2.putText(preview_bgr, f"Sentinel-1 SAR: {summary['status']}", (15, 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+                    cv2.imwrite(preview_path, preview_bgr)
+                    print(f"      Visual radar inspection image saved: {preview_path}")
     except Exception:
         pass
 
@@ -189,8 +214,10 @@ def main():
                         help="Bounding box: min_lon min_lat max_lon max_lat")
     parser.add_argument("--live", action="store_true", help="Query live Copernicus CDSE API")
     parser.add_argument("--drill", action="store_true", help="Run simulated emergency spill incident drill")
-    parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold")
+    parser.add_argument("--conf", type=float, default=0.20, help="Confidence threshold")
     parser.add_argument("--model", type=str, default="ai-model/weight/best.onnx", help="Path to ONNX weights")
+    parser.add_argument("--from-date", type=str, default=None, help="Start observation date (ISO 8601 or YYYY-MM-DD)")
+    parser.add_argument("--to-date", type=str, default=None, help="End observation date (ISO 8601 or YYYY-MM-DD)")
     parser.add_argument("--post", type=str, default=None, help="Backend URL to post detections")
 
     args = parser.parse_args()
@@ -200,6 +227,8 @@ def main():
         conf_threshold=args.conf,
         use_live_cdse=args.live,
         drill=args.drill,
+        from_date=getattr(args, "from_date", None),
+        to_date=getattr(args, "to_date", None),
         post_to_backend_url=args.post
     )
 

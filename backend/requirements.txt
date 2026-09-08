@@ -11,3 +11,4 @@ shapely
 pillow
 opencv-python-headless
 pyproj
+websockets

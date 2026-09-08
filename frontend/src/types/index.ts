@@ -206,4 +206,64 @@ export interface SurveillanceScanResult {
   timestamp: string;
   spills: SurveillanceSpill[];
   persisted_spill_ids: number[];
+  sensor?: string;
+  time_window?: {
+    start: string;
+    end: string;
+  };
+}
+
+export interface SurveillanceScanParams {
+  zone?: string;
+  bbox?: [number, number, number, number];
+  drill?: boolean;
+  start_date?: string;
+  end_date?: string;
+  sensor?: string;
+  cloud_cover?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Historical Spill Domain
+// ---------------------------------------------------------------------------
+
+export interface HistoricalSpillSummary {
+  id: number;
+  detected_at: string;
+  area_km2: number;
+  centroid_lat: number;
+  centroid_lon: number;
+  wind_speed_kmh?: number | null;
+  wind_direction_deg?: number | null;
+  current_speed_kmh?: number | null;
+  current_direction_deg?: number | null;
+  total_drift_distance_km?: number | null;
+  combined_drift_direction_deg?: number | null;
+  drift_hours_assumed?: number | null;
+  has_drift_estimate: boolean;
+}
+
+export interface SuspectCandidate {
+  mmsi: string | number;
+  name: string;
+  distance_km: number;
+  hours_before_detection: number;
+  proximity_score: number;
+  time_score: number;
+  type_score: number;
+  has_suspicious_gap: boolean;
+  gap_score: number;
+  has_speed_anomaly: boolean;
+  speed_anomaly_score: number;
+  is_legitimately_docked: boolean;
+  final_score: number;
+  flags: string[];
+}
+
+export interface HistoricalSpillDetail {
+  spill_id: number;
+  spill: Spill;
+  ocean: OceanographicData;
+  suspects: SuspectCandidate[];
+  raw: Record<string, any>;
 }
