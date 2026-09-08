@@ -27,6 +27,7 @@ export interface ZoneConfig {
   label: string;
   bbox: [number, number, number, number];
   description: string;
+  timeWindow?: [string, string];
 }
 
 export const STRATEGIC_ZONES: ZoneConfig[] = [
@@ -36,12 +37,28 @@ export const STRATEGIC_ZONES: ZoneConfig[] = [
     label: 'MV Wakashio Spill (Mauritius 2020)',
     bbox: [57.65, -20.55, 57.85, -20.35],
     description: 'Real 2020 bunker fuel spill in Pointe d\'Esny lagoon (Ground Truth)',
+    timeWindow: ['2020-08-05', '2020-08-15'],
   },
   {
     key: 'baniyas_syria',
     label: 'Baniyas Refinery Spill (Mediterranean 2021)',
     bbox: [35.70, 35.15, 36.00, 35.45],
     description: 'Real 2021 fuel oil spill off Syrian coast / Cyprus (Ground Truth)',
+    timeWindow: ['2021-08-25', '2021-08-31'],
+  },
+  {
+    key: 'tobago_barge',
+    label: 'Tobago Mystery Barge Spill (Caribbean 2024)',
+    bbox: [-60.85, 11.10, -60.65, 11.25],
+    description: 'Real 2024 overturned barge bunker spill off southern Tobago (Ground Truth)',
+    timeWindow: ['2024-02-07', '2024-02-14'],
+  },
+  {
+    key: 'novorossiysk_cpc',
+    label: 'CPC Marine Terminal Spill (Black Sea 2021)',
+    bbox: [37.45, 44.55, 37.75, 44.75],
+    description: 'Real 2021 Caspian Pipeline tanker loading crude leak (Ground Truth)',
+    timeWindow: ['2021-08-07', '2021-08-10'],
   },
   // Global Critical Chokepoints & International Tanker Corridors
   {
@@ -445,13 +462,10 @@ export default function SurveillancePanel({
                     soundEngine.playBubbleHover();
                     const newKey = e.target.value;
                     setSelectedZoneKey(newKey);
-                    if (newKey === 'wakashio_mauritius') {
-                      setStartDate('2020-08-05');
-                      setEndDate('2020-08-15');
-                      setTimePreset('custom');
-                    } else if (newKey === 'baniyas_syria') {
-                      setStartDate('2021-08-25');
-                      setEndDate('2021-08-31');
+                    const matched = INDIAN_OCEAN_ZONES.find((z) => z.key === newKey);
+                    if (matched?.timeWindow) {
+                      setStartDate(matched.timeWindow[0]);
+                      setEndDate(matched.timeWindow[1]);
                       setTimePreset('custom');
                     }
                   }}
