@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Radar,
@@ -167,6 +167,7 @@ interface SurveillancePanelProps {
   isDrawingBox: boolean;
   onToggleDrawBox: () => void;
   onOpenHistory?: () => void;
+  onTargetAoiChange?: (bbox: [number, number, number, number], label: string) => void;
 }
 
 export default function SurveillancePanel({
@@ -177,6 +178,7 @@ export default function SurveillancePanel({
   isDrawingBox,
   onToggleDrawBox,
   onOpenHistory,
+  onTargetAoiChange,
 }: SurveillancePanelProps) {
   const [mode, setMode] = useState<'preset' | 'custom'>('preset');
   const [selectedZoneKey, setSelectedZoneKey] = useState<string>('mumbai_high');
@@ -234,6 +236,21 @@ export default function SurveillancePanel({
       return { res: '30m / pixel', label: 'Downsampled to stay within 2,500 px', badge: '30m' };
     }
   }, [areaKm2]);
+
+  // When drawing mode is activated or box is drawn, automatically switch mode to custom
+  useEffect(() => {
+    if (isDrawingBox) {
+      setMode('custom');
+    }
+  }, [isDrawingBox]);
+
+  // Synchronize target AOI to MapView for animated camera fly-to & target bounding box preview
+  useEffect(() => {
+    if (numericBbox) {
+      const label = mode === 'preset' ? selectedZone.label : 'Custom AOI';
+      onTargetAoiChange?.(numericBbox, label);
+    }
+  }, [numericBbox, mode, selectedZone, onTargetAoiChange]);
 
   // Handle Preset Changes for Temporal Window
   const handlePresetChange = (preset: 'latest' | '3d' | '7d' | 'custom') => {

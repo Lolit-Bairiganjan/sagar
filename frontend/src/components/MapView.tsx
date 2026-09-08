@@ -97,6 +97,23 @@ function FitToScan({ scan }: { scan: SurveillanceScanResult | null }) {
   return null;
 }
 
+function FitToAoi({ bbox }: { bbox: [number, number, number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (bbox && bbox.length === 4) {
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      map.fitBounds(
+        [
+          [minLat, minLon],
+          [maxLat, maxLon],
+        ],
+        { padding: [80, 80], animate: true, maxZoom: 11 }
+      );
+    }
+  }, [bbox, map]);
+  return null;
+}
+
 function DeselectOnEmptyMap({ onEmptyClick }: { onEmptyClick: () => void }) {
   useMapEvents({ click: () => onEmptyClick() });
   return null;
@@ -241,6 +258,13 @@ export default function MapView({
   });
   const [tileError, setTileError] = useState(false);
   const [latestScan, setLatestScan] = useState<SurveillanceScanResult | null>(null);
+  const [targetAoi, setTargetAoi] = useState<{
+    bbox: [number, number, number, number];
+    label: string;
+  } | null>({
+    bbox: [71.25, 19.35, 71.55, 19.65],
+    label: 'Mumbai High Offshore',
+  });
 
   // Bi-directional bounding box state synchronized with SurveillancePanel
   const [customBbox, setCustomBbox] = useState<[string, string, string, string]>([
@@ -341,17 +365,24 @@ export default function MapView({
         <CenterOnVessel vessel={centerTargetVessel} />
         <DeselectOnEmptyMap onEmptyClick={onEmptyMapClick} />
 
+        {/* Live Surveillance Viewport Auto-Focus Controllers */}
+        {activeSection === 'Live Surveillance' && (
+          <FitToAoi bbox={targetAoi?.bbox ?? null} />
+        )}
+        <FitToScan scan={latestScan} />
+
         {/* Interactive Bounding Box Drawer */}
         <BoxDrawHandler isDrawing={isDrawingBox} onBoxDrawn={handleBoxDrawn} />
 
-        {/* Real-time Custom AOI Target Bounding Box on Map (Bi-directional sync) */}
-        {activeSection === 'Live Surveillance' && parsedCustomBbox && (
+        {/* Real-time Target Surveillance AOI Bounding Box on Map */}
+        {activeSection === 'Live Surveillance' && targetAoi && (
           <RLPolygon
+            key={`target-aoi-${targetAoi.bbox.join('-')}`}
             positions={[
-              [parsedCustomBbox[1], parsedCustomBbox[0]],
-              [parsedCustomBbox[1], parsedCustomBbox[2]],
-              [parsedCustomBbox[3], parsedCustomBbox[2]],
-              [parsedCustomBbox[3], parsedCustomBbox[0]],
+              [targetAoi.bbox[1], targetAoi.bbox[0]],
+              [targetAoi.bbox[1], targetAoi.bbox[2]],
+              [targetAoi.bbox[3], targetAoi.bbox[2]],
+              [targetAoi.bbox[3], targetAoi.bbox[0]],
             ]}
             pathOptions={{
               color: '#FF6600',
@@ -362,9 +393,9 @@ export default function MapView({
               dashArray: '5 5',
             }}
           >
-            <RLTooltip direction="top">
+            <RLTooltip direction="top" permanent>
               <div className="font-mono text-[10px] text-[#FF6600] font-bold">
-                🎯 TARGET AOI [{parsedCustomBbox.join(', ')}]
+                🎯 {targetAoi.label} [{targetAoi.bbox.join(', ')}]
               </div>
             </RLTooltip>
           </RLPolygon>
@@ -467,6 +498,7 @@ export default function MapView({
             isDrawingBox={isDrawingBox}
             onToggleDrawBox={() => setIsDrawingBox((b) => !b)}
             onOpenHistory={() => onNavigateSection?.('Spill Analysis')}
+            onTargetAoiChange={(bbox, label) => setTargetAoi({ bbox, label })}
           />
         </div>
       )}
