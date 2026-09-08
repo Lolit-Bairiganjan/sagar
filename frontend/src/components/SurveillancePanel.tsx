@@ -37,6 +37,12 @@ export const STRATEGIC_ZONES: ZoneConfig[] = [
     bbox: [57.65, -20.55, 57.85, -20.35],
     description: 'Real 2020 bunker fuel spill in Pointe d\'Esny lagoon (Ground Truth)',
   },
+  {
+    key: 'baniyas_syria',
+    label: 'Baniyas Refinery Spill (Mediterranean 2021)',
+    bbox: [35.70, 35.15, 36.00, 35.45],
+    description: 'Real 2021 fuel oil spill off Syrian coast / Cyprus (Ground Truth)',
+  },
   // Global Critical Chokepoints & International Tanker Corridors
   {
     key: 'strait_of_hormuz',
@@ -442,6 +448,10 @@ export default function SurveillancePanel({
                     if (newKey === 'wakashio_mauritius') {
                       setStartDate('2020-08-05');
                       setEndDate('2020-08-15');
+                      setTimePreset('custom');
+                    } else if (newKey === 'baniyas_syria') {
+                      setStartDate('2021-08-25');
+                      setEndDate('2021-08-31');
                       setTimePreset('custom');
                     }
                   }}

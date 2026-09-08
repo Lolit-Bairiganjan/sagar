@@ -67,6 +67,11 @@ PRIORITY_ZONES = {
         "bbox": [57.65, -20.55, 57.85, -20.35],
         "description": "Real 2020 bunker fuel spill in Pointe d'Esny lagoon (Ground Truth)",
     },
+    "baniyas_syria": {
+        "label": "Baniyas Refinery Spill (Mediterranean 2021)",
+        "bbox": [35.70, 35.15, 36.00, 35.45],
+        "description": "Real 2021 fuel oil spill off Syrian coast / Cyprus (Ground Truth)",
+    },
     # Indian Ocean & Regional EEZ Strategic Zones
     "mumbai_high": {
         "label": "Mumbai High",
@@ -238,6 +243,8 @@ def trigger_scan(req: ScanRequest):
 
     if req.zone == "wakashio_mauritius" and not req.start_date:
         cmd.extend(["--from-date", "2020-08-05T00:00:00Z", "--to-date", "2020-08-15T23:59:59Z"])
+    elif req.zone == "baniyas_syria" and not req.start_date:
+        cmd.extend(["--from-date", "2021-08-25T00:00:00Z", "--to-date", "2021-08-31T23:59:59Z"])
     else:
         if req.start_date:
             start_val = req.start_date
