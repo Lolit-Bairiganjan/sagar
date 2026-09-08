@@ -66,21 +66,25 @@ PRIORITY_ZONES = {
         "label": "MV Wakashio Disaster (Mauritius 2020)",
         "bbox": [57.65, -20.55, 57.85, -20.35],
         "description": "Real 2020 bunker fuel spill in Pointe d'Esny lagoon (Ground Truth)",
+        "time_window": ("2020-08-05T00:00:00Z", "2020-08-15T23:59:59Z"),
     },
     "baniyas_syria": {
         "label": "Baniyas Refinery Spill (Mediterranean 2021)",
         "bbox": [35.70, 35.15, 36.00, 35.45],
         "description": "Real 2021 fuel oil spill off Syrian coast / Cyprus (Ground Truth)",
+        "time_window": ("2021-08-25T00:00:00Z", "2021-08-31T23:59:59Z"),
     },
     "tobago_barge": {
         "label": "Tobago Mystery Barge Spill (Caribbean 2024)",
         "bbox": [-60.85, 11.10, -60.65, 11.25],
         "description": "Real 2024 overturned barge bunker spill off southern Tobago (Ground Truth)",
+        "time_window": ("2024-02-07T00:00:00Z", "2024-02-14T23:59:59Z"),
     },
     "novorossiysk_cpc": {
         "label": "CPC Marine Terminal Spill (Black Sea 2021)",
         "bbox": [37.45, 44.55, 37.75, 44.75],
         "description": "Real 2021 Caspian Pipeline tanker loading crude leak (Ground Truth)",
+        "time_window": ("2021-08-07T00:00:00Z", "2021-08-10T23:59:59Z"),
     },
     # Indian Ocean & Regional EEZ Strategic Zones
     "mumbai_high": {
@@ -251,25 +255,26 @@ def trigger_scan(req: ScanRequest):
     else:
         cmd.append("--live")
 
-    if req.zone == "wakashio_mauritius" and not req.start_date:
-        cmd.extend(["--from-date", "2020-08-05T00:00:00Z", "--to-date", "2020-08-15T23:59:59Z"])
-    elif req.zone == "baniyas_syria" and not req.start_date:
-        cmd.extend(["--from-date", "2021-08-25T00:00:00Z", "--to-date", "2021-08-31T23:59:59Z"])
-    elif req.zone == "tobago_barge" and not req.start_date:
-        cmd.extend(["--from-date", "2024-02-07T00:00:00Z", "--to-date", "2024-02-14T23:59:59Z"])
-    elif req.zone == "novorossiysk_cpc" and not req.start_date:
-        cmd.extend(["--from-date", "2021-08-07T00:00:00Z", "--to-date", "2021-08-10T23:59:59Z"])
-    else:
-        if req.start_date:
-            start_val = req.start_date
-            if len(start_val) == 10:
-                start_val = f"{start_val}T00:00:00Z"
-            cmd.extend(["--from-date", start_val])
-        if req.end_date:
-            end_val = req.end_date
-            if len(end_val) == 10:
-                end_val = f"{end_val}T23:59:59Z"
-            cmd.extend(["--to-date", end_val])
+    # Date window resolution (generic, data-driven)
+    from_date = req.start_date
+    to_date = req.end_date
+
+    # If user selected a predefined zone and didn't provide dates, use zone's default time_window if present
+    if req.zone and not from_date and not to_date:
+        zone_info = PRIORITY_ZONES.get(req.zone, {})
+        if "time_window" in zone_info:
+            from_date, to_date = zone_info["time_window"]
+
+    if from_date:
+        start_val = from_date
+        if len(start_val) == 10:
+            start_val = f"{start_val}T00:00:00Z"
+        cmd.extend(["--from-date", start_val])
+    if to_date:
+        end_val = to_date
+        if len(end_val) == 10:
+            end_val = f"{end_val}T23:59:59Z"
+        cmd.extend(["--to-date", end_val])
 
     try:
         result = subprocess.run(
