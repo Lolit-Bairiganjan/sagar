@@ -59,9 +59,9 @@ def run_option3_pipeline(
         from rasterio.windows import Window
         from lightweight_tiler import TileItem
 
-        sample_path = "ai-model/data/images/train/class_0_00041.jpg"
+        sample_path = "ai-model/data/images/train/class_1_00004.jpg"
         if not os.path.exists(sample_path):
-            sample_path = os.path.join(os.path.dirname(__file__), "..", "data", "images", "train", "class_0_00041.jpg")
+            sample_path = os.path.join(os.path.dirname(__file__), "..", "data", "images", "train", "class_1_00004.jpg")
 
         img = cv2.imread(sample_path)
         img = cv2.resize(img, (416, 416))
@@ -160,26 +160,34 @@ def run_option3_pipeline(
     # Save a human-viewable preview image for visual verification
     try:
         import cv2
-        import rasterio
-        target_tif = output_geotiff if os.path.exists(output_geotiff) else None
-        if target_tif and os.path.exists(target_tif):
-            with rasterio.open(target_tif) as src:
-                b1 = src.read(1)
-                valid = b1[np.isfinite(b1)]
-                if len(valid) > 0:
-                    p2, p98 = np.percentile(valid, (2, 98))
-                    b1_clean = np.nan_to_num(b1, nan=p2)
-                    b1_norm = np.clip((b1_clean - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                else:
-                    b1_norm = np.zeros(b1.shape, dtype=np.uint8)
-
-                preview_bgr = cv2.cvtColor(b1_norm, cv2.COLOR_GRAY2BGR)
-                status_color = (0, 255, 0) if summary['status'] == 'ZONE_CLEAN' else (0, 0, 255)
-                cv2.putText(preview_bgr, f"Sentinel-1 SAR: {summary['status']}", (15, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-                preview_path = "ai-model/outputs/latest_sar_preview.jpg"
-                cv2.imwrite(preview_path, preview_bgr)
+        preview_path = "ai-model/outputs/latest_sar_preview.jpg"
+        if drill:
+            sample_preview = cv2.imread("ai-model/data/images/train/class_1_00004.jpg")
+            if sample_preview is not None:
+                cv2.putText(sample_preview, f"Sentinel-1 SAR: ANOMALY DETECTED ({len(all_detected_spills)} slicks)", (15, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                cv2.imwrite(preview_path, sample_preview)
                 print(f"      Visual radar inspection image saved: {preview_path}")
+        else:
+            import rasterio
+            target_tif = output_geotiff if os.path.exists(output_geotiff) else None
+            if target_tif and os.path.exists(target_tif):
+                with rasterio.open(target_tif) as src:
+                    b1 = src.read(1)
+                    valid = b1[np.isfinite(b1)]
+                    if len(valid) > 0:
+                        p2, p98 = np.percentile(valid, (2, 98))
+                        b1_clean = np.nan_to_num(b1, nan=p2)
+                        b1_norm = np.clip((b1_clean - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                    else:
+                        b1_norm = np.zeros(b1.shape, dtype=np.uint8)
+
+                    preview_bgr = cv2.cvtColor(b1_norm, cv2.COLOR_GRAY2BGR)
+                    status_color = (0, 255, 0) if summary['status'] == 'ZONE_CLEAN' else (0, 0, 255)
+                    cv2.putText(preview_bgr, f"Sentinel-1 SAR: {summary['status']}", (15, 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+                    cv2.imwrite(preview_path, preview_bgr)
+                    print(f"      Visual radar inspection image saved: {preview_path}")
     except Exception:
         pass
 
