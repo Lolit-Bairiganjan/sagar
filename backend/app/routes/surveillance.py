@@ -72,6 +72,16 @@ PRIORITY_ZONES = {
         "bbox": [35.70, 35.15, 36.00, 35.45],
         "description": "Real 2021 fuel oil spill off Syrian coast / Cyprus (Ground Truth)",
     },
+    "tobago_barge": {
+        "label": "Tobago Mystery Barge Spill (Caribbean 2024)",
+        "bbox": [-60.85, 11.10, -60.65, 11.25],
+        "description": "Real 2024 overturned barge bunker spill off southern Tobago (Ground Truth)",
+    },
+    "novorossiysk_cpc": {
+        "label": "CPC Marine Terminal Spill (Black Sea 2021)",
+        "bbox": [37.45, 44.55, 37.75, 44.75],
+        "description": "Real 2021 Caspian Pipeline tanker loading crude leak (Ground Truth)",
+    },
     # Indian Ocean & Regional EEZ Strategic Zones
     "mumbai_high": {
         "label": "Mumbai High",
@@ -245,6 +255,10 @@ def trigger_scan(req: ScanRequest):
         cmd.extend(["--from-date", "2020-08-05T00:00:00Z", "--to-date", "2020-08-15T23:59:59Z"])
     elif req.zone == "baniyas_syria" and not req.start_date:
         cmd.extend(["--from-date", "2021-08-25T00:00:00Z", "--to-date", "2021-08-31T23:59:59Z"])
+    elif req.zone == "tobago_barge" and not req.start_date:
+        cmd.extend(["--from-date", "2024-02-07T00:00:00Z", "--to-date", "2024-02-14T23:59:59Z"])
+    elif req.zone == "novorossiysk_cpc" and not req.start_date:
+        cmd.extend(["--from-date", "2021-08-07T00:00:00Z", "--to-date", "2021-08-10T23:59:59Z"])
     else:
         if req.start_date:
             start_val = req.start_date

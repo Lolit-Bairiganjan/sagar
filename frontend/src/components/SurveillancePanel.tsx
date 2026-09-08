@@ -43,6 +43,18 @@ export const STRATEGIC_ZONES: ZoneConfig[] = [
     bbox: [35.70, 35.15, 36.00, 35.45],
     description: 'Real 2021 fuel oil spill off Syrian coast / Cyprus (Ground Truth)',
   },
+  {
+    key: 'tobago_barge',
+    label: 'Tobago Mystery Barge Spill (Caribbean 2024)',
+    bbox: [-60.85, 11.10, -60.65, 11.25],
+    description: 'Real 2024 overturned barge bunker spill off southern Tobago (Ground Truth)',
+  },
+  {
+    key: 'novorossiysk_cpc',
+    label: 'CPC Marine Terminal Spill (Black Sea 2021)',
+    bbox: [37.45, 44.55, 37.75, 44.75],
+    description: 'Real 2021 Caspian Pipeline tanker loading crude leak (Ground Truth)',
+  },
   // Global Critical Chokepoints & International Tanker Corridors
   {
     key: 'strait_of_hormuz',
@@ -452,6 +464,14 @@ export default function SurveillancePanel({
                     } else if (newKey === 'baniyas_syria') {
                       setStartDate('2021-08-25');
                       setEndDate('2021-08-31');
+                      setTimePreset('custom');
+                    } else if (newKey === 'tobago_barge') {
+                      setStartDate('2024-02-07');
+                      setEndDate('2024-02-14');
+                      setTimePreset('custom');
+                    } else if (newKey === 'novorossiysk_cpc') {
+                      setStartDate('2021-08-07');
+                      setEndDate('2021-08-10');
                       setTimePreset('custom');
                     }
                   }}
