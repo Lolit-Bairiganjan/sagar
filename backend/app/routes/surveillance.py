@@ -232,9 +232,15 @@ def trigger_scan(req: ScanRequest):
         cmd.append("--live")
 
     if req.start_date:
-        cmd.extend(["--from-date", req.start_date])
+        start_val = req.start_date
+        if len(start_val) == 10:
+            start_val = f"{start_val}T00:00:00Z"
+        cmd.extend(["--from-date", start_val])
     if req.end_date:
-        cmd.extend(["--to-date", req.end_date])
+        end_val = req.end_date
+        if len(end_val) == 10:
+            end_val = f"{end_val}T23:59:59Z"
+        cmd.extend(["--to-date", end_val])
 
     try:
         result = subprocess.run(

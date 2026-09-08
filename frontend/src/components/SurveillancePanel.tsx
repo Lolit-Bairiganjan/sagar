@@ -269,13 +269,16 @@ export default function SurveillancePanel({
         );
       }
 
+      const startIso = timePreset !== 'latest' ? `${startDate}T00:00:00Z` : undefined;
+      const endIso = timePreset !== 'latest' ? `${endDate}T23:59:59Z` : undefined;
+
       let payload: SurveillanceScanParams;
       if (mode === 'preset') {
         payload = {
           zone: selectedZone.key,
           drill: isDrill,
-          start_date: timePreset !== 'latest' ? startDate : undefined,
-          end_date: timePreset !== 'latest' ? endDate : undefined,
+          start_date: startIso,
+          end_date: endIso,
           sensor,
           cloud_cover: cloudCover,
         };
@@ -290,8 +293,8 @@ export default function SurveillancePanel({
         payload = {
           bbox: numericBbox,
           drill: isDrill,
-          start_date: timePreset !== 'latest' ? startDate : undefined,
-          end_date: timePreset !== 'latest' ? endDate : undefined,
+          start_date: startIso,
+          end_date: endIso,
           sensor,
           cloud_cover: cloudCover,
         };

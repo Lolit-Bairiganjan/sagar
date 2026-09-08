@@ -101,11 +101,21 @@ class CopernicusCDSEClient:
         """
         from datetime import datetime, timezone, timedelta
 
+        # Ensure from_date and to_date are formatted as full ISO 8601 strings (YYYY-MM-DDTHH:MM:SSZ)
         if not to_date:
             to_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        elif len(to_date) == 10:
+            to_date = f"{to_date}T23:59:59Z"
+        elif not to_date.endswith("Z") and "+" not in to_date:
+            to_date = f"{to_date}Z"
+
         if not from_date:
             # Default to 30 days prior
             from_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        elif len(from_date) == 10:
+            from_date = f"{from_date}T00:00:00Z"
+        elif not from_date.endswith("Z") and "+" not in from_date:
+            from_date = f"{from_date}Z"
 
         if not self._access_token:
             self.authenticate()
