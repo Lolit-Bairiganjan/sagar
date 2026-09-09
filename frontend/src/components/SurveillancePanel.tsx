@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Radar,
@@ -17,10 +17,121 @@ import {
   Sliders,
   Archive,
   Maximize2,
+  Ship,
+  Clock,
+  ShieldAlert,
+  Radio,
+  Droplets,
+  Compass,
+  Wind,
 } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
-import type { SurveillanceScanResult, SurveillanceScanParams } from '../types';
+import type { SurveillanceScanResult, SurveillanceScanParams, HistoricalWeather } from '../types';
+import type { ReverseDriftResult } from '../utils/driftEngine';
 import { triggerSurveillanceScan } from '../api/client';
+
+// ---------------------------------------------------------------------------
+// Point-to-AOI Calculator: parses lat/lon points and builds square bounding boxes
+// ---------------------------------------------------------------------------
+
+export function parsePointCoordinate(raw: string): { lat: number; lon: number } | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+
+  // Pattern 1: Lat with N/S, Lon with E/W (e.g. 17.512°N, 56.038°E or 17.512 N, 56.038 W)
+  const dirMatch = trimmed.match(
+    /([+-]?\d+(?:\.\d+)?)\s*°?\s*([NSns])\s*[,/;\s]\s*([+-]?\d+(?:\.\d+)?)\s*°?\s*([EWew])/
+  );
+  if (dirMatch) {
+    let lat = parseFloat(dirMatch[1]);
+    if (dirMatch[2].toUpperCase() === 'S') lat = -Math.abs(lat);
+    let lon = parseFloat(dirMatch[3]);
+    if (dirMatch[4].toUpperCase() === 'W') lon = -Math.abs(lon);
+    if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      return { lat, lon };
+    }
+  }
+
+  // Pattern 2: Lon with E/W, Lat with N/S (e.g. 56.038°E, 17.512°N)
+  const dirMatchRev = trimmed.match(
+    /([+-]?\d+(?:\.\d+)?)\s*°?\s*([EWew])\s*[,/;\s]\s*([+-]?\d+(?:\.\d+)?)\s*°?\s*([NSns])/
+  );
+  if (dirMatchRev) {
+    let lon = parseFloat(dirMatchRev[1]);
+    if (dirMatchRev[2].toUpperCase() === 'W') lon = -Math.abs(lon);
+    let lat = parseFloat(dirMatchRev[3]);
+    if (dirMatchRev[4].toUpperCase() === 'S') lat = -Math.abs(lat);
+    if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      return { lat, lon };
+    }
+  }
+
+  // Pattern 3: Standard decimal pair (e.g. 17.512, 56.038 or -20.45 57.75)
+  const cleaned = trimmed.replace(/[°[\]()]/g, '');
+  const parts = cleaned.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const p1 = parseFloat(parts[0]);
+    const p2 = parseFloat(parts[1]);
+    if (!isNaN(p1) && !isNaN(p2)) {
+      if (Math.abs(p1) <= 90 && Math.abs(p2) <= 180) {
+        return { lat: p1, lon: p2 };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function calculatePointToBbox(
+  lat: number,
+  lon: number,
+  spanKm: number = 25
+): [number, number, number, number] {
+  const halfSideKm = spanKm / 2;
+  const dLat = halfSideKm / 111.0;
+  const radLat = (lat * Math.PI) / 180;
+  const cosVal = Math.max(Math.cos(radLat), 0.01);
+  const dLon = halfSideKm / (111.0 * cosVal);
+
+  const minLon = Math.max(-180, Math.min(180, Number((lon - dLon).toFixed(4))));
+  const maxLon = Math.max(-180, Math.min(180, Number((lon + dLon).toFixed(4))));
+  const minLat = Math.max(-90, Math.min(90, Number((lat - dLat).toFixed(4))));
+  const maxLat = Math.max(-90, Math.min(90, Number((lat + dLat).toFixed(4))));
+
+  return [minLon, minLat, maxLon, maxLat];
+}
+
+// ---------------------------------------------------------------------------
+// Day-Month-Year (DD-MM-YYYY) Date Formatting Helpers
+// ---------------------------------------------------------------------------
+
+export function isoToDmy(iso: string): string {
+  if (!iso) return '';
+  const parts = iso.split('-');
+  if (parts.length === 3) {
+    return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
+  }
+  return iso;
+}
+
+export function dmyToIso(dmy: string): string | null {
+  if (!dmy) return null;
+  const cleaned = dmy.replace(/[/.]/g, '-').trim();
+  const parts = cleaned.split('-');
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    if (year.length === 4) {
+      const dNum = parseInt(day, 10);
+      const mNum = parseInt(month, 10);
+      if (dNum >= 1 && dNum <= 31 && mNum >= 1 && mNum <= 12) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  return null;
+}
 
 export interface ZoneConfig {
   key: string;
@@ -198,6 +309,10 @@ interface SurveillancePanelProps {
   onToggleDrawBox: () => void;
   onOpenHistory?: () => void;
   onTargetAoiChange?: (bbox: [number, number, number, number], label: string) => void;
+  selectedSpillIdx?: number;
+  onSelectSpillIdx?: (idx: number) => void;
+  slickWeather?: HistoricalWeather | null;
+  slickDrift?: ReverseDriftResult | null;
 }
 
 export default function SurveillancePanel({
@@ -209,6 +324,10 @@ export default function SurveillancePanel({
   onToggleDrawBox,
   onOpenHistory,
   onTargetAoiChange,
+  selectedSpillIdx = 0,
+  onSelectSpillIdx,
+  slickWeather = null,
+  slickDrift = null,
 }: SurveillancePanelProps) {
   const [mode, setMode] = useState<'preset' | 'custom'>('preset');
   const [selectedZoneKey, setSelectedZoneKey] = useState<string>('mumbai_high');
@@ -229,6 +348,7 @@ export default function SurveillancePanel({
   // Sensor selection and optical cloud cover slider
   const [sensor, setSensor] = useState<'Sentinel-1 SAR' | 'Sentinel-2 MSI'>('Sentinel-1 SAR');
   const [cloudCover, setCloudCover] = useState<number>(10);
+  const [showAllSuspects, setShowAllSuspects] = useState(true);
 
   const selectedZone =
     INDIAN_OCEAN_ZONES.find((z) => z.key === selectedZoneKey) || INDIAN_OCEAN_ZONES[0];
@@ -274,13 +394,92 @@ export default function SurveillancePanel({
     }
   }, [isDrawingBox]);
 
+  // Synchronized text input states for Day-Month-Year (DD-MM-YYYY) display
+  const [startDateDmy, setStartDateDmy] = useState<string>(() => isoToDmy(startDate));
+  const [endDateDmy, setEndDateDmy] = useState<string>(() => isoToDmy(endDate));
+  const startPickerRef = useRef<HTMLInputElement>(null);
+  const endPickerRef = useRef<HTMLInputElement>(null);
+
+  // Sync DMY display strings whenever underlying ISO date state updates (presets, zone switches, etc.)
+  useEffect(() => {
+    setStartDateDmy(isoToDmy(startDate));
+  }, [startDate]);
+
+  useEffect(() => {
+    setEndDateDmy(isoToDmy(endDate));
+  }, [endDate]);
+
   // Synchronize target AOI to MapView for animated camera fly-to & target bounding box preview
   useEffect(() => {
     if (numericBbox) {
-      const label = mode === 'preset' ? selectedZone.label : 'Custom AOI';
+      const label =
+        mode === 'preset'
+          ? selectedZone.label
+          : `Custom AOI [${numericBbox.join(', ')}]`;
       onTargetAoiChange?.(numericBbox, label);
     }
   }, [numericBbox, mode, selectedZone, onTargetAoiChange]);
+
+  // Handle Start Date changes (from DD-MM-YYYY typing or calendar picker)
+  const handleStartDateChange = (val: string) => {
+    let iso: string | null = null;
+    const normalized = val.replace(/\//g, '-');
+    if (normalized.includes('-')) {
+      const parts = normalized.split('-');
+      if (parts[0]?.length === 4) {
+        // YYYY-MM-DD (from native date picker)
+        iso = normalized;
+        setStartDateDmy(isoToDmy(normalized));
+      } else if (parts[2]?.length === 4) {
+        // DD-MM-YYYY (typed)
+        setStartDateDmy(val);
+        iso = dmyToIso(normalized);
+      } else {
+        setStartDateDmy(val);
+      }
+    } else {
+      setStartDateDmy(val);
+    }
+
+    if (iso) {
+      setStartDate(iso);
+      setTimePreset('custom');
+      try {
+        const parts = iso.split('-');
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const d = new Date(Date.UTC(y, m, day + 8));
+        const endIso = d.toISOString().slice(0, 10);
+        setEndDate(endIso);
+        setEndDateDmy(isoToDmy(endIso));
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const handleEndDateChange = (val: string) => {
+    setTimePreset('custom');
+    const normalized = val.replace(/\//g, '-');
+    if (normalized.includes('-')) {
+      const parts = normalized.split('-');
+      if (parts[0]?.length === 4) {
+        // YYYY-MM-DD (from native date picker)
+        setEndDate(normalized);
+        setEndDateDmy(isoToDmy(normalized));
+      } else if (parts[2]?.length === 4) {
+        // DD-MM-YYYY (typed)
+        setEndDateDmy(val);
+        const iso = dmyToIso(normalized);
+        if (iso) setEndDate(iso);
+      } else {
+        setEndDateDmy(val);
+      }
+    } else {
+      setEndDateDmy(val);
+    }
+  };
 
   // Handle Preset Changes for Temporal Window
   const handlePresetChange = (preset: 'latest' | '3d' | '7d' | 'custom') => {
@@ -298,7 +497,7 @@ export default function SurveillancePanel({
       setStartDate(past.toISOString().slice(0, 10));
     } else if (preset === 'latest') {
       const past = new Date();
-      past.setDate(now.getDate() - 30);
+      past.setDate(now.getDate() - 8);
       setStartDate(past.toISOString().slice(0, 10));
     }
   };
@@ -316,8 +515,29 @@ export default function SurveillancePanel({
         );
       }
 
-      const startIso = timePreset !== 'latest' ? `${startDate}T00:00:00Z` : undefined;
-      const endIso = timePreset !== 'latest' ? `${endDate}T23:59:59Z` : undefined;
+      // Automated 8-day window safeguard: If end date is > 14 days after start date,
+      // automatically clamp to startDate + 8 days to avoid retrieving clean future satellite scenes
+      let clampedEndDate = endDate;
+      if (startDate && endDate) {
+        try {
+          const dStart = new Date(startDate);
+          const dEnd = new Date(endDate);
+          const diffDays = Math.round((dEnd.getTime() - dStart.getTime()) / (1000 * 3600 * 24));
+          if (diffDays > 14) {
+            const autoEnd = new Date(dStart);
+            autoEnd.setDate(autoEnd.getDate() + 8);
+            clampedEndDate = autoEnd.toISOString().slice(0, 10);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // In custom AOI mode, or whenever dates are customized or timePreset is not 'latest':
+      // Always forward the user's dates to Copernicus SAR pipeline
+      const isLatestPresetMode = mode === 'preset' && timePreset === 'latest';
+      const startIso = !isLatestPresetMode && startDate ? `${startDate}T00:00:00Z` : undefined;
+      const endIso = !isLatestPresetMode && clampedEndDate ? `${clampedEndDate}T23:59:59Z` : undefined;
 
       let payload: SurveillanceScanParams;
       if (mode === 'preset') {
@@ -443,7 +663,7 @@ export default function SurveillancePanel({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="flex flex-col gap-2.5 p-3 overflow-hidden"
+            className="flex flex-col gap-2.5 p-3 max-h-[calc(100vh-140px)] overflow-y-auto"
           >
             {/* ─── Mode 1: 19 Predefined Strategic Maritime Zones ─── */}
             {mode === 'preset' ? (
@@ -489,82 +709,85 @@ export default function SurveillancePanel({
                 </div>
               </div>
             ) : (
-              /* ─── Mode 2: CUSTOM BOUNDING BOX [W, S, E, N] with Map Draw Sync ─── */
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label
-                    className={`text-[9px] font-mono uppercase flex items-center gap-1 ${
-                      isLight ? 'text-[#1F2937] font-semibold' : 'text-[#8E95A5]'
-                    }`}
-                  >
-                    <Crosshair size={10} className="text-[#FF6600]" /> Custom Bounding Box [W, S, E, N]:
-                  </label>
+              /* ─── Mode 2: CUSTOM BOUNDING BOX & MAP DRAW ─── */
+              <div className="flex flex-col gap-2">
+                {/* 4-Corner Bounding Box Coordinates with Map Draw Sync */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label
+                      className={`text-[9px] font-mono uppercase flex items-center gap-1 ${
+                        isLight ? 'text-[#1F2937] font-semibold' : 'text-[#8E95A5]'
+                      }`}
+                    >
+                      <Crosshair size={10} className="text-[#FF6600]" /> Bounding Box [W, S, E, N]:
+                    </label>
 
-                  {/* Interactive Map Draw Button */}
-                  <button
-                    onClick={() => {
-                      soundEngine.playBubbleHover();
-                      onToggleDrawBox();
-                    }}
-                    className={`flex items-center gap-1 px-2 py-0.5 font-mono text-[9px] font-bold border rounded transition-all cursor-pointer ${
-                      isDrawingBox
-                        ? 'border-[#FF6600] bg-[#FF6600] text-black shadow-[0_0_8px_rgba(255,102,0,0.6)] animate-pulse'
-                        : 'border-[#FF6600]/40 bg-[#FF6600]/10 text-[#FF6600] hover:bg-[#FF6600]/20'
-                    }`}
-                    title="Click and drag on the map to define a target surveillance area"
-                  >
-                    <Pencil size={9} />
-                    {isDrawingBox ? 'DRAWING (DRAG MAP)...' : 'DRAW AOI ON MAP'}
-                  </button>
-                </div>
+                    {/* Interactive Map Draw Button */}
+                    <button
+                      onClick={() => {
+                        soundEngine.playBubbleHover();
+                        onToggleDrawBox();
+                      }}
+                      className={`flex items-center gap-1 px-2 py-0.5 font-mono text-[9px] font-bold border rounded transition-all cursor-pointer ${
+                        isDrawingBox
+                          ? 'border-[#FF6600] bg-[#FF6600] text-black shadow-[0_0_8px_rgba(255,102,0,0.6)] animate-pulse'
+                          : 'border-[#FF6600]/40 bg-[#FF6600]/10 text-[#FF6600] hover:bg-[#FF6600]/20'
+                      }`}
+                      title="Click and drag on the map to define a target surveillance area"
+                    >
+                      <Pencil size={9} />
+                      {isDrawingBox ? 'DRAWING (DRAG MAP)...' : 'DRAW AOI ON MAP'}
+                    </button>
+                  </div>
 
-                {/* Coordinate Inputs: Min Lon, Min Lat, Max Lon, Max Lat */}
-                <div className="grid grid-cols-4 gap-1">
-                  {(['Min Lon (W)', 'Min Lat (S)', 'Max Lon (E)', 'Max Lat (N)'] as const).map(
-                    (label, i) => (
-                      <div key={label} className="flex flex-col gap-0.5">
-                        <span className={`text-[8px] font-mono truncate ${isLight ? 'text-gray-600' : 'text-[#6B7280]'}`}>
-                          {label}
-                        </span>
-                        <input
-                          type="text"
-                          value={customBbox[i]}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const next = [...customBbox] as [string, string, string, string];
-                            next[i] = val;
-                            onCustomBboxChange(next);
-                          }}
-                          className={`border px-1 py-1 text-[10px] font-mono text-center rounded outline-none transition-colors ${
-                            isLight
-                              ? 'bg-white border-black/30 text-[#14161B] font-semibold focus:border-[#FF6600]'
-                              : 'bg-[#181B22] border-[#2D323E] text-white focus:border-[#FF6600]'
-                          }`}
-                        />
-                      </div>
-                    ),
-                  )}
-                </div>
+                  {/* Coordinate Inputs: Min Lon, Min Lat, Max Lon, Max Lat */}
+                  <div className="grid grid-cols-4 gap-1">
+                    {(['Min Lon (W)', 'Min Lat (S)', 'Max Lon (E)', 'Max Lat (N)'] as const).map(
+                      (label, i) => (
+                        <div key={label} className="flex flex-col gap-0.5">
+                          <span className={`text-[8px] font-mono truncate ${isLight ? 'text-gray-600' : 'text-[#6B7280]'}`}>
+                            {label}
+                          </span>
+                          <input
+                            type="text"
+                            value={customBbox[i]}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const next = [...customBbox] as [string, string, string, string];
+                              next[i] = val;
+                              onCustomBboxChange(next);
+                            }}
+                            className={`border px-1 py-1 text-[10px] font-mono text-center rounded outline-none transition-colors ${
+                              isLight
+                                ? 'bg-white border-black/30 text-[#14161B] font-semibold focus:border-[#FF6600]'
+                                : 'bg-[#181B22] border-[#2D323E] text-white focus:border-[#FF6600]'
+                            }`}
+                          />
+                        </div>
+                      ),
+                    )}
+                  </div>
 
-                {/* Area Metrics & Downsampling Badge */}
-                <div className="flex items-center justify-between text-[8px] font-mono px-1 pt-0.5">
-                  <span className={`flex items-center gap-1 ${isAreaExceeded ? 'text-red-400 font-bold' : 'text-[#8E95A5]'}`}>
-                    <Maximize2 size={9} /> Area: {areaKm2} km² {isAreaExceeded && '(EXCEEDS 2,500 km² CAP)'}
-                  </span>
-                  <span className="text-[#FF6600] font-semibold">
-                    Resolution: {resolutionInfo.res} ({resolutionInfo.badge})
-                  </span>
-                </div>
-
-                {/* Safeguard Warning Banner if Area Exceeded */}
-                {isAreaExceeded && (
-                  <div className="flex items-start gap-1.5 p-1.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 font-mono text-[9px] leading-tight">
-                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                    <span>
-                      Selected area is too large for real-time scan ({areaKm2} km²). Please narrow your Area of Interest under 2,500 km² (~50 km × 50 km).
+                  {/* Area Metrics & Downsampling Badge */}
+                  <div className="flex items-center justify-between text-[8px] font-mono px-1 pt-0.5">
+                    <span className={`flex items-center gap-1 ${isAreaExceeded ? 'text-red-400 font-bold' : 'text-[#8E95A5]'}`}>
+                      <Maximize2 size={9} /> Area: {areaKm2} km² {isAreaExceeded && '(EXCEEDS 2,500 km² CAP)'}
+                    </span>
+                    <span className="text-[#FF6600] font-semibold">
+                      Resolution: {resolutionInfo.res} ({resolutionInfo.badge})
                     </span>
                   </div>
-                )}
+
+                  {/* Safeguard Warning Banner if Area Exceeded */}
+                  {isAreaExceeded && (
+                    <div className="flex items-start gap-1.5 p-1.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 font-mono text-[9px] leading-tight">
+                      <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                      <span>
+                        Selected area is too large for real-time scan ({areaKm2} km²). Please narrow your Area of Interest under 2,500 km² (~50 km × 50 km).
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -577,49 +800,179 @@ export default function SurveillancePanel({
 
                 {/* Presets: Latest, 3D, 7D, Custom */}
                 <div className="flex items-center gap-1 font-mono text-[8px]">
-                  {(['latest', '3d', '7d'] as const).map((p) => (
+                  {(['latest', '3d', '7d', 'custom'] as const).map((p) => (
                     <button
                       key={p}
-                      onClick={() => handlePresetChange(p)}
+                      onClick={() => {
+                        if (p !== 'custom') {
+                          handlePresetChange(p);
+                        } else {
+                          setTimePreset('custom');
+                        }
+                      }}
                       className={`px-1.5 py-0.5 rounded border uppercase transition-colors cursor-pointer ${
                         timePreset === p
                           ? 'border-[#FF6600] bg-[#FF6600]/20 text-[#FF6600] font-bold'
                           : 'border-transparent text-[#8E95A5] hover:text-white'
                       }`}
                     >
-                      {p === 'latest' ? 'Latest Pass' : p.toUpperCase()}
+                      {p === 'latest' ? 'Latest Pass' : p === 'custom' ? 'Custom' : p.toUpperCase()}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Start & End Date Inputs */}
+              {/* Start & End Date Inputs with Auto 8-Day Window (DD-MM-YYYY) */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-1 border px-1.5 py-1 rounded text-[10px] font-mono border-[#2D323E] bg-[#14161B]">
-                  <span className="text-[8px] text-[#6B7280] uppercase">Start:</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setTimePreset('custom');
-                    }}
-                    className="w-full bg-transparent text-white outline-none cursor-pointer text-[9px]"
-                  />
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[8px] font-mono text-[#8E95A5] uppercase font-bold px-0.5">
+                    <span>Start (DD-MM-YYYY)</span>
+                    <span className="text-[#FF6600]">T-0</span>
+                  </div>
+                  <div
+                    className={`relative flex items-center justify-between border px-2 py-1 rounded transition-colors ${
+                      isLight ? 'border-black/20 bg-white' : 'border-[#2D323E] bg-[#14161B]'
+                    }`}
+                  >
+                    <input
+                      type="text"
+                      value={startDateDmy}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      placeholder="DD-MM-YYYY"
+                      maxLength={10}
+                      className={`w-full bg-transparent outline-none font-mono text-[10.5px] font-bold tracking-wide ${
+                        isLight ? 'text-black' : 'text-white'
+                      }`}
+                    />
+                    <div className="relative shrink-0 flex items-center justify-center w-5 h-5 ml-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          try {
+                            startPickerRef.current?.showPicker();
+                          } catch {
+                            startPickerRef.current?.focus();
+                          }
+                        }}
+                        className="text-[#6B7280] hover:text-[#FF6600] transition-colors cursor-pointer p-0.5"
+                        title="Pick date from calendar"
+                      >
+                        <Calendar size={13} />
+                      </button>
+                      <input
+                        ref={startPickerRef}
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleStartDateChange(e.target.value);
+                          }
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          right: 0,
+                          width: '20px',
+                          height: '20px',
+                          opacity: 0,
+                          pointerEvents: 'none',
+                        }}
+                        tabIndex={-1}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 border px-1.5 py-1 rounded text-[10px] font-mono border-[#2D323E] bg-[#14161B]">
-                  <span className="text-[8px] text-[#6B7280] uppercase">End:</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setTimePreset('custom');
-                    }}
-                    className="w-full bg-transparent text-white outline-none cursor-pointer text-[9px]"
-                  />
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[8px] font-mono text-[#8E95A5] uppercase font-bold px-0.5">
+                    <span>End (+8D Auto)</span>
+                    <span className="text-emerald-400 font-bold">+8 Days</span>
+                  </div>
+                  <div
+                    className={`relative flex items-center justify-between border px-2 py-1 rounded transition-colors ${
+                      isLight ? 'border-black/20 bg-white' : 'border-[#2D323E] bg-[#14161B]'
+                    }`}
+                  >
+                    <input
+                      type="text"
+                      value={endDateDmy}
+                      onChange={(e) => handleEndDateChange(e.target.value)}
+                      placeholder="DD-MM-YYYY"
+                      maxLength={10}
+                      className={`w-full bg-transparent outline-none font-mono text-[10.5px] font-bold tracking-wide ${
+                        isLight ? 'text-black' : 'text-white'
+                      }`}
+                    />
+                    <div className="relative shrink-0 flex items-center justify-center w-5 h-5 ml-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          try {
+                            endPickerRef.current?.showPicker();
+                          } catch {
+                            endPickerRef.current?.focus();
+                          }
+                        }}
+                        className="text-[#6B7280] hover:text-[#FF6600] transition-colors cursor-pointer p-0.5"
+                        title="Pick date from calendar"
+                      >
+                        <Calendar size={13} />
+                      </button>
+                      <input
+                        ref={endPickerRef}
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleEndDateChange(e.target.value);
+                          }
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          right: 0,
+                          width: '20px',
+                          height: '20px',
+                          opacity: 0,
+                          pointerEvents: 'none',
+                        }}
+                        tabIndex={-1}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {/* Auto 8-Day Active Tag or Clamping Notification */}
+              {timePreset === 'custom' && startDate && endDate && (
+                (() => {
+                  const dStart = new Date(startDate);
+                  const dEnd = new Date(endDate);
+                  const diffDays = Math.round((dEnd.getTime() - dStart.getTime()) / (1000 * 3600 * 24));
+                  if (diffDays > 14) {
+                    return (
+                      <div className="flex items-start gap-1 p-1.5 rounded border border-[#FF6600]/40 bg-[#FF6600]/10 text-[#FF6600] font-mono text-[8px] leading-tight">
+                        <Clock size={10} className="shrink-0 mt-0.5" />
+                        <span>
+                          Wide range detected ({diffDays}d). Process API queries single scenes; search will automatically clamp to 8 days from start date to ensure target incident pass is captured.
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex items-center justify-between text-[8px] font-mono text-[#8E95A5] px-0.5">
+                      <span className="text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 size={9} /> Window: {diffDays} days (Auto-calculated)
+                      </span>
+                      <span className="text-[#FF6600]">Aligned with Sentinel-1 orbit</span>
+                    </div>
+                  );
+                })()
+              )}
 
               {/* Warning if date precedes Sentinel-1 constellation launch (Oct 2014) */}
               {timePreset !== 'latest' && startDate && startDate < '2014-10-01' && (
@@ -663,6 +1016,44 @@ export default function SurveillancePanel({
               )}
             </div>
 
+            {/* ─── Multi-Slick Switcher Strip ─── */}
+            {hasDetections && activeResult?.spills && activeResult.spills.length > 1 && (
+              <div
+                className={`flex items-center justify-between p-2 rounded border font-mono text-[9px] ${
+                  isLight ? 'bg-orange-50/80 border-orange-200 text-orange-950' : 'bg-black/40 border-[#FF6600]/30 text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-[8.5px] uppercase tracking-wide text-[#FF6600] font-bold">
+                  <Droplets size={11} className="text-[#FF6600]" />
+                  <span>Detected Slicks ({activeResult.spills.length}):</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {activeResult.spills.map((s, idx) => {
+                    const isSelected = (selectedSpillIdx === idx);
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          soundEngine.playBubbleHover();
+                          onSelectSpillIdx?.(idx);
+                        }}
+                        className={`px-2 py-0.5 rounded text-[8.5px] font-bold transition-all cursor-pointer border ${
+                          isSelected
+                            ? 'bg-[#FF6600] text-black border-[#FF6600] shadow-[0_0_8px_rgba(255,102,0,0.4)] font-black'
+                            : isLight
+                            ? 'bg-white text-gray-700 border-black/15 hover:border-[#FF6600]/50'
+                            : 'bg-white/5 text-gray-300 border-white/10 hover:border-[#FF6600]/50'
+                        }`}
+                        title={`Click to focus Slick #${idx + 1} (${s.area_km2.toFixed(2)} km²)`}
+                      >
+                        Slick #{idx + 1} ({s.area_km2.toFixed(1)} km²)
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* ─── Status Strip ─── */}
             <div
               className={`flex items-center justify-between border px-2.5 py-1.5 text-[10px] font-mono rounded ${
@@ -695,7 +1086,9 @@ export default function SurveillancePanel({
                 ) : hasDetections ? (
                   <span className={`flex items-center gap-1 font-bold ${isLight ? 'text-red-900' : 'text-red-400'}`}>
                     <AlertTriangle size={11} />
-                    {activeResult.total_slicks_detected} SLICK ({activeResult.total_area_km2} km²)
+                    {activeResult.total_slicks_detected > 1
+                      ? `SLICK #${selectedSpillIdx + 1} / ${activeResult.total_slicks_detected} (${((activeResult.spills[selectedSpillIdx] || activeResult.spills[0]).area_km2).toFixed(1)} km²)`
+                      : `${activeResult.total_slicks_detected} SLICK (${activeResult.total_area_km2} km²)`}
                   </span>
                 ) : isClean ? (
                   <span className={`flex items-center gap-1 font-bold ${isLight ? 'text-emerald-900' : 'text-emerald-400'}`}>
@@ -707,6 +1100,86 @@ export default function SurveillancePanel({
                 )}
               </div>
             </div>
+
+            {/* ─── Weather & Reverse-Drift (Leeway) Card ─── */}
+            {slickWeather && (
+              <div
+                className={`border rounded p-2 flex flex-col gap-1.5 font-mono text-[9px] ${
+                  isLight ? 'border-sky-300/80 bg-sky-50/70 text-sky-950' : 'border-sky-500/30 bg-sky-950/20 text-sky-200'
+                }`}
+              >
+                <div className="flex items-center justify-between border-b pb-1 border-white/10">
+                  <div className="flex items-center gap-1.5">
+                    <Compass size={11} className="text-[#FF6600]" />
+                    <span className="font-bold text-[9px] uppercase tracking-wider text-[#FF6600]">
+                      Weather & Drift Conditions
+                    </span>
+                  </div>
+                  <span className="text-[7.5px] px-1.5 py-0.5 rounded font-bold uppercase bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                    {slickWeather.cached ? 'LOCAL CACHED ARCHIVE' : 'OPEN-METEO VERIFIED'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1 text-center text-[8px]">
+                  <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                    <span className="text-[7px] text-[#8E95A5] uppercase">Wind (10m)</span>
+                    <span className="font-bold text-sky-400">
+                      {slickWeather.wind_speed_kmh} km/h
+                    </span>
+                    <span className="text-[6.5px] text-[#8E95A5]">Dir: {slickWeather.wind_direction_deg}°</span>
+                  </div>
+                  <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                    <span className="text-[7px] text-[#8E95A5] uppercase">Surface Current</span>
+                    <span className="font-bold text-teal-400">
+                      {slickWeather.current_speed_kmh} km/h
+                    </span>
+                    <span className="text-[6.5px] text-[#8E95A5]">Dir: {slickWeather.current_direction_deg}°</span>
+                  </div>
+                  <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                    <span className="text-[7px] text-[#8E95A5] uppercase">Sea State</span>
+                    <span className="font-bold text-amber-400">
+                      {slickWeather.wave_height_m}m wave
+                    </span>
+                    <span className="text-[6.5px] text-[#8E95A5]">{slickWeather.sea_temperature_c}°C</span>
+                  </div>
+                </div>
+
+                {slickDrift && (
+                  <div className="flex items-center justify-between pt-0.5 text-[8px] text-[#8E95A5]">
+                    <span>Net Drift: <strong className={isLight ? 'text-black' : 'text-white'}>{slickDrift.combinedDriftSpeedKmh} km/h</strong> @ {slickDrift.combinedDriftDirectionDeg}°</span>
+                    <span>Backtrack (6h): <strong className="text-[#FF6600]">{slickDrift.totalDriftDistanceKm} km</strong></span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ─── AIS Suspect Attribution Summary (Detailed in Right Suspect Dock) ─── */}
+            {hasDetections && activeResult && (activeResult.max_suspect || activeResult.ground_truth_comparison?.has_ground_truth || (activeResult.suspects && activeResult.suspects.length > 0)) && (
+              <div
+                className={`border rounded p-2 flex items-center justify-between font-mono text-[9px] ${
+                  isLight
+                    ? 'border-orange-300/80 bg-orange-50/90 text-[#14161B]'
+                    : 'border-[#FF6600]/40 bg-[#FF6600]/10 text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Ship size={12} className="text-[#FF6600] shrink-0" />
+                  <div className="truncate">
+                    <span className="text-[#FF6600] font-bold uppercase">
+                      {activeResult.max_suspect ? `Suspect: ${activeResult.max_suspect.name}` : 'Suspects Correlated'}
+                    </span>
+                    {activeResult.max_suspect && (
+                      <span className={`text-[8px] ml-1 ${isLight ? 'text-gray-600' : 'text-[#8E95A5]'}`}>
+                        ({activeResult.max_suspect.probability_pct.toFixed(0)}% match)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-[8px] px-1.5 py-0.5 rounded font-bold uppercase bg-[#FF6600] text-black shrink-0">
+                  SHOWN IN RIGHT DOCK →
+                </span>
+              </div>
+            )}
 
             {/* ─── Dual Actions: [ 🎯 SCAN LIVE SAR ] [ 🔥 ALERT DRILL (SPILL) ] ─── */}
             <div className="grid grid-cols-2 gap-2 pt-0.5">

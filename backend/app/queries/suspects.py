@@ -17,16 +17,13 @@ WITH params AS (
 ),
 drift_adj AS (
   SELECT p.spill_id,
-    COALESCE(
-      ST_Project(
-        ST_Centroid(p.spill_geom)::geography,
-        rde.total_drift_distance_km * 1000,
-        radians((rde.combined_drift_direction_deg + 180) %% 360)
-      )::geometry,
-      p.spill_geom
-    ) AS estimated_discharge_point
+    CASE
+      WHEN %(origin_lat)s IS NOT NULL AND %(origin_lon)s IS NOT NULL THEN
+        ST_SetSRID(ST_MakePoint(%(origin_lon)s::float, %(origin_lat)s::float), 4326)
+      ELSE
+        ST_Centroid(p.spill_geom)
+    END AS estimated_discharge_point
   FROM params p
-  LEFT JOIN reverse_drift_estimates rde ON rde.spill_id = p.spill_id
 ),
 buffer_calc AS (
   SELECT p.*, d.estimated_discharge_point,
@@ -118,15 +115,27 @@ ORDER BY final_score DESC;
 """
 
 
-def get_suspects(spill_id: int) -> list[dict]:
+def get_suspects(
+    spill_id: int,
+    origin_lat: float | None = None,
+    origin_lon: float | None = None,
+) -> list[dict]:
     """
     Returns ranked suspect vessels for a spill as a list of dicts.
-    An empty list is a normal, valid outcome (no suspects found).
+    If origin_lat and origin_lon are provided (e.g. from frontend drift calculation),
+    attribution is calculated directly against that estimated discharge origin point.
     """
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute(QUERY_TEXT, {"spill_id": spill_id})
+        cur.execute(
+            QUERY_TEXT,
+            {
+                "spill_id": spill_id,
+                "origin_lat": origin_lat,
+                "origin_lon": origin_lon,
+            },
+        )
         columns = [desc[0] for desc in cur.description]
         rows = [dict(zip(columns, row)) for row in cur.fetchall()]
         cur.close()

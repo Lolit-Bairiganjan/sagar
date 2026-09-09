@@ -32,7 +32,7 @@ def run_option3_pipeline(
     bbox: Tuple[float, float, float, float] = (71.25, 19.35, 71.55, 19.65),
     output_geotiff: str = "ai-model/outputs/option3_scene.tif",
     onnx_model_path: str = "ai-model/weight/best.onnx",
-    conf_threshold: float = 0.20,
+    conf_threshold: float = 0.08,
     use_live_cdse: bool = False,
     drill: bool = False,
     from_date: Optional[str] = None,
@@ -80,24 +80,39 @@ def run_option3_pipeline(
     else:
         # ─── Step 1: Ingest Calibrated SAR Scene ──────────────────────────────────
         step1_start = time.time()
+        d_lon = abs(bbox[2] - bbox[0])
+        d_lat = abs(bbox[3] - bbox[1])
+        max_deg_span = max(d_lon, d_lat)
+
+        # Dynamic raster resolution:
+        # For spans <= ~30 km (< 0.3°), 832x832 (2x2 tiles) provides native ~25m resolution.
+        # For larger spans up to 50 km (~0.5°), 1248x1248 (3x3 tiles) preserves high
+        # spatial resolution (~35-40m/px) and avoids tile-boundary cutoffs.
+        if max_deg_span > 0.30:
+            target_width = 1248
+            target_height = 1248
+        else:
+            target_width = 832
+            target_height = 832
+
         if use_live_cdse:
-            print("\n[1/4] Querying Copernicus CDSE Process API for Sentinel-1 GRD...")
+            print(f"\n[1/4] Querying Copernicus CDSE Process API for Sentinel-1 GRD ({target_width}x{target_height})...")
             client = CopernicusCDSEClient()
             scene_path = client.fetch_calibrated_geotiff(
                 bbox=bbox,
                 output_path=output_geotiff,
                 from_date=from_date,
                 to_date=to_date,
-                width=832,
-                height=832
+                width=target_width,
+                height=target_height
             )
         else:
             print("\n[1/4] Generating calibrated 3-band SAR GeoTIFF (Offline/Test)...")
             scene_path = create_synthetic_test_geotiff(
                 output_path=output_geotiff,
                 bbox=bbox,
-                width=832,
-                height=832,
+                width=target_width,
+                height=target_height,
                 inject_spill=True
             )
         print(f"      Scene saved: {scene_path} ({os.path.getsize(scene_path) / 1024:.1f} KB) in {time.time() - step1_start:.2f}s")
@@ -214,7 +229,7 @@ def main():
                         help="Bounding box: min_lon min_lat max_lon max_lat")
     parser.add_argument("--live", action="store_true", help="Query live Copernicus CDSE API")
     parser.add_argument("--drill", action="store_true", help="Run simulated emergency spill incident drill")
-    parser.add_argument("--conf", type=float, default=0.20, help="Confidence threshold")
+    parser.add_argument("--conf", type=float, default=0.08, help="Confidence threshold")
     parser.add_argument("--model", type=str, default="ai-model/weight/best.onnx", help="Path to ONNX weights")
     parser.add_argument("--from-date", type=str, default=None, help="Start observation date (ISO 8601 or YYYY-MM-DD)")
     parser.add_argument("--to-date", type=str, default=None, help="End observation date (ISO 8601 or YYYY-MM-DD)")
