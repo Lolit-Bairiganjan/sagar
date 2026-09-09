@@ -408,8 +408,11 @@ export default function SurveillancePanel({
         );
       }
 
-      const startIso = timePreset !== 'latest' ? `${startDate}T00:00:00Z` : undefined;
-      const endIso = timePreset !== 'latest' ? `${endDate}T23:59:59Z` : undefined;
+      // In custom AOI mode, or whenever dates are customized or timePreset is not 'latest':
+      // Always forward the user's dates to Copernicus SAR pipeline
+      const isLatestPresetMode = mode === 'preset' && timePreset === 'latest';
+      const startIso = !isLatestPresetMode && startDate ? `${startDate}T00:00:00Z` : undefined;
+      const endIso = !isLatestPresetMode && endDate ? `${endDate}T23:59:59Z` : undefined;
 
       let payload: SurveillanceScanParams;
       if (mode === 'preset') {
@@ -595,17 +598,35 @@ export default function SurveillancePanel({
                     <span className="text-[9px] font-mono font-bold uppercase text-[#FF6600] flex items-center gap-1">
                       <Calculator size={10} /> Point-to-AOI Calculator:
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPointInput('17.512°N, 56.038°E');
-                        handleApplyPointAoi('17.512°N, 56.038°E', boxSpanKm);
-                      }}
-                      className="text-[8px] font-mono text-[#FF6600] hover:underline cursor-pointer flex items-center gap-0.5"
-                      title="Load textbook specification coordinate: 17.512°N, 56.038°E"
-                    >
-                      <span>TEST: 17.512°N, 56.038°E</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPointInput('17.512°N, 56.038°E');
+                          handleApplyPointAoi('17.512°N, 56.038°E', boxSpanKm);
+                        }}
+                        className="text-[8px] font-mono text-[#FF6600] hover:underline cursor-pointer flex items-center gap-0.5"
+                        title="Load textbook specification coordinate: 17.512°N, 56.038°E"
+                      >
+                        <span>TEST: 17.512°N, 56.038°E</span>
+                      </button>
+                      <span className="text-[#6B7280] text-[8px]">|</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPointInput('-20.4381S, 57.7442E');
+                          setBoxSpanKm(25);
+                          setStartDate('2020-08-06');
+                          setEndDate('2020-08-15');
+                          setTimePreset('custom');
+                          handleApplyPointAoi('-20.4381S, 57.7442E', 25);
+                        }}
+                        className="text-[8px] font-mono text-[#FF6600] hover:underline cursor-pointer flex items-center gap-0.5 font-bold"
+                        title="Load real MV Wakashio disaster ground truth (-20.4381S, 57.7442E | Aug 6-15, 2020 | 25km native SAR)"
+                      >
+                        <span>★ WAKASHIO 2020</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -658,8 +679,9 @@ export default function SurveillancePanel({
                               ? 'border-black/15 text-gray-700 hover:text-black'
                               : 'border-white/10 text-[#8E95A5] hover:text-white'
                           }`}
+                          title={km === 25 ? 'Recommended 25km span: preserves native 10m/20m SAR wave backscatter and prevents tile boundary truncation' : undefined}
                         >
-                          {km} km
+                          {km} km {km === 25 ? '★' : ''}
                         </button>
                       ))}
                     </div>
@@ -761,17 +783,23 @@ export default function SurveillancePanel({
 
                 {/* Presets: Latest, 3D, 7D, Custom */}
                 <div className="flex items-center gap-1 font-mono text-[8px]">
-                  {(['latest', '3d', '7d'] as const).map((p) => (
+                  {(['latest', '3d', '7d', 'custom'] as const).map((p) => (
                     <button
                       key={p}
-                      onClick={() => handlePresetChange(p)}
+                      onClick={() => {
+                        if (p !== 'custom') {
+                          handlePresetChange(p);
+                        } else {
+                          setTimePreset('custom');
+                        }
+                      }}
                       className={`px-1.5 py-0.5 rounded border uppercase transition-colors cursor-pointer ${
                         timePreset === p
                           ? 'border-[#FF6600] bg-[#FF6600]/20 text-[#FF6600] font-bold'
                           : 'border-transparent text-[#8E95A5] hover:text-white'
                       }`}
                     >
-                      {p === 'latest' ? 'Latest Pass' : p.toUpperCase()}
+                      {p === 'latest' ? 'Latest Pass' : p === 'custom' ? 'Custom' : p.toUpperCase()}
                     </button>
                   ))}
                 </div>
