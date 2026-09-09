@@ -375,7 +375,7 @@ export default function MapView({
         <BoxDrawHandler isDrawing={isDrawingBox} onBoxDrawn={handleBoxDrawn} />
 
         {/* Real-time Target Surveillance AOI Bounding Box on Map */}
-        {activeSection === 'Live Surveillance' && targetAoi && (
+        {(activeSection === 'Live Surveillance' || toggles.satellite) && targetAoi && (
           <RLPolygon
             key={`target-aoi-${targetAoi.bbox.join('-')}`}
             positions={[
@@ -401,8 +401,8 @@ export default function MapView({
           </RLPolygon>
         )}
 
-        {/* Live surveillance detection polygons from Satellite AI Scan */}
-        {latestScan?.spills?.map((detectedSpill, idx) => {
+        {/* Live surveillance detection polygons from Satellite AI Scan (controlled by SPILL toggle) */}
+        {toggles.spill && latestScan?.spills?.map((detectedSpill, idx) => {
           const coords: [number, number][] = detectedSpill.spill_polygon_geojson.coordinates[0].map(
             ([lon, lat]: [number, number]) => [lat, lon] as [number, number]
           );
@@ -433,8 +433,8 @@ export default function MapView({
           );
         })}
 
-        {/* Scanned zone bounding box */}
-        {latestScan && (
+        {/* Scanned zone bounding box (controlled by FOOTPRINT toggle) */}
+        {toggles.satellite && latestScan && (
           <RLPolygon
             positions={[
               [latestScan.aoi_bbox[1], latestScan.aoi_bbox[0]],

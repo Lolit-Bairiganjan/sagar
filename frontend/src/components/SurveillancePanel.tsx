@@ -17,10 +17,82 @@ import {
   Sliders,
   Archive,
   Maximize2,
+  Calculator,
 } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
 import type { SurveillanceScanResult, SurveillanceScanParams } from '../types';
 import { triggerSurveillanceScan } from '../api/client';
+
+// ---------------------------------------------------------------------------
+// Point-to-AOI Calculator: parses lat/lon points and builds square bounding boxes
+// ---------------------------------------------------------------------------
+
+export function parsePointCoordinate(raw: string): { lat: number; lon: number } | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+
+  // Pattern 1: Lat with N/S, Lon with E/W (e.g. 17.512°N, 56.038°E or 17.512 N, 56.038 W)
+  const dirMatch = trimmed.match(
+    /([+-]?\d+(?:\.\d+)?)\s*°?\s*([NSns])\s*[,/;\s]\s*([+-]?\d+(?:\.\d+)?)\s*°?\s*([EWew])/
+  );
+  if (dirMatch) {
+    let lat = parseFloat(dirMatch[1]);
+    if (dirMatch[2].toUpperCase() === 'S') lat = -Math.abs(lat);
+    let lon = parseFloat(dirMatch[3]);
+    if (dirMatch[4].toUpperCase() === 'W') lon = -Math.abs(lon);
+    if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      return { lat, lon };
+    }
+  }
+
+  // Pattern 2: Lon with E/W, Lat with N/S (e.g. 56.038°E, 17.512°N)
+  const dirMatchRev = trimmed.match(
+    /([+-]?\d+(?:\.\d+)?)\s*°?\s*([EWew])\s*[,/;\s]\s*([+-]?\d+(?:\.\d+)?)\s*°?\s*([NSns])/
+  );
+  if (dirMatchRev) {
+    let lon = parseFloat(dirMatchRev[1]);
+    if (dirMatchRev[2].toUpperCase() === 'W') lon = -Math.abs(lon);
+    let lat = parseFloat(dirMatchRev[3]);
+    if (dirMatchRev[4].toUpperCase() === 'S') lat = -Math.abs(lat);
+    if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      return { lat, lon };
+    }
+  }
+
+  // Pattern 3: Standard decimal pair (e.g. 17.512, 56.038 or -20.45 57.75)
+  const cleaned = trimmed.replace(/[°[\]()]/g, '');
+  const parts = cleaned.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const p1 = parseFloat(parts[0]);
+    const p2 = parseFloat(parts[1]);
+    if (!isNaN(p1) && !isNaN(p2)) {
+      if (Math.abs(p1) <= 90 && Math.abs(p2) <= 180) {
+        return { lat: p1, lon: p2 };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function calculatePointToBbox(
+  lat: number,
+  lon: number,
+  spanKm: number = 25
+): [number, number, number, number] {
+  const halfSideKm = spanKm / 2;
+  const dLat = halfSideKm / 111.0;
+  const radLat = (lat * Math.PI) / 180;
+  const cosVal = Math.max(Math.cos(radLat), 0.01);
+  const dLon = halfSideKm / (111.0 * cosVal);
+
+  const minLon = Math.max(-180, Math.min(180, Number((lon - dLon).toFixed(4))));
+  const maxLon = Math.max(-180, Math.min(180, Number((lon + dLon).toFixed(4))));
+  const minLat = Math.max(-90, Math.min(90, Number((lat - dLat).toFixed(4))));
+  const maxLat = Math.max(-90, Math.min(90, Number((lat + dLat).toFixed(4))));
+
+  return [minLon, minLat, maxLon, maxLat];
+}
 
 export interface ZoneConfig {
   key: string;
@@ -274,10 +346,30 @@ export default function SurveillancePanel({
     }
   }, [isDrawingBox]);
 
+  // Point-to-AOI calculator state
+  const [pointInput, setPointInput] = useState<string>('17.512°N, 56.038°E');
+  const [boxSpanKm, setBoxSpanKm] = useState<number>(25);
+  const [pointParseError, setPointParseError] = useState<string | null>(null);
+
+  const handleApplyPointAoi = (rawCoord: string = pointInput, span: number = boxSpanKm) => {
+    soundEngine.playBubbleHover();
+    setPointParseError(null);
+    const parsed = parsePointCoordinate(rawCoord);
+    if (!parsed) {
+      setPointParseError('Invalid point format. Try "17.512°N, 56.038°E" or "17.512, 56.038"');
+      return;
+    }
+    const [w, s, e, n] = calculatePointToBbox(parsed.lat, parsed.lon, span);
+    onCustomBboxChange([w.toString(), s.toString(), e.toString(), n.toString()]);
+  };
+
   // Synchronize target AOI to MapView for animated camera fly-to & target bounding box preview
   useEffect(() => {
     if (numericBbox) {
-      const label = mode === 'preset' ? selectedZone.label : 'Custom AOI';
+      const label =
+        mode === 'preset'
+          ? selectedZone.label
+          : `Custom AOI [${numericBbox.join(', ')}]`;
       onTargetAoiChange?.(numericBbox, label);
     }
   }, [numericBbox, mode, selectedZone, onTargetAoiChange]);
@@ -489,82 +581,174 @@ export default function SurveillancePanel({
                 </div>
               </div>
             ) : (
-              /* ─── Mode 2: CUSTOM BOUNDING BOX [W, S, E, N] with Map Draw Sync ─── */
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label
-                    className={`text-[9px] font-mono uppercase flex items-center gap-1 ${
-                      isLight ? 'text-[#1F2937] font-semibold' : 'text-[#8E95A5]'
-                    }`}
-                  >
-                    <Crosshair size={10} className="text-[#FF6600]" /> Custom Bounding Box [W, S, E, N]:
-                  </label>
+              /* ─── Mode 2: POINT-TO-AOI CALCULATOR & CUSTOM BOUNDING BOX ─── */
+              <div className="flex flex-col gap-2">
+                {/* Point-to-AOI Calculator (Center Lat/Lon → Square BBox) */}
+                <div
+                  className={`border p-2 rounded flex flex-col gap-1.5 transition-colors ${
+                    isLight
+                      ? 'bg-black/[0.03] border-black/15'
+                      : 'bg-black/30 border-[#2D323E]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-mono font-bold uppercase text-[#FF6600] flex items-center gap-1">
+                      <Calculator size={10} /> Point-to-AOI Calculator:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPointInput('17.512°N, 56.038°E');
+                        handleApplyPointAoi('17.512°N, 56.038°E', boxSpanKm);
+                      }}
+                      className="text-[8px] font-mono text-[#FF6600] hover:underline cursor-pointer flex items-center gap-0.5"
+                      title="Load textbook specification coordinate: 17.512°N, 56.038°E"
+                    >
+                      <span>TEST: 17.512°N, 56.038°E</span>
+                    </button>
+                  </div>
 
-                  {/* Interactive Map Draw Button */}
-                  <button
-                    onClick={() => {
-                      soundEngine.playBubbleHover();
-                      onToggleDrawBox();
-                    }}
-                    className={`flex items-center gap-1 px-2 py-0.5 font-mono text-[9px] font-bold border rounded transition-all cursor-pointer ${
-                      isDrawingBox
-                        ? 'border-[#FF6600] bg-[#FF6600] text-black shadow-[0_0_8px_rgba(255,102,0,0.6)] animate-pulse'
-                        : 'border-[#FF6600]/40 bg-[#FF6600]/10 text-[#FF6600] hover:bg-[#FF6600]/20'
-                    }`}
-                    title="Click and drag on the map to define a target surveillance area"
-                  >
-                    <Pencil size={9} />
-                    {isDrawingBox ? 'DRAWING (DRAG MAP)...' : 'DRAW AOI ON MAP'}
-                  </button>
-                </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={pointInput}
+                      onChange={(e) => {
+                        setPointInput(e.target.value);
+                        setPointParseError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleApplyPointAoi();
+                        }
+                      }}
+                      placeholder="e.g. 17.512°N, 56.038°E or 17.512, 56.038"
+                      className={`flex-1 border px-2 py-1 text-[10px] font-mono rounded outline-none transition-colors ${
+                        isLight
+                          ? 'bg-white border-black/25 text-[#14161B] focus:border-[#FF6600]'
+                          : 'bg-[#181B22] border-[#2D323E] text-white focus:border-[#FF6600]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPointAoi()}
+                      className="px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-wider bg-[#FF6600] text-black rounded hover:bg-[#FF7711] transition-colors cursor-pointer shrink-0"
+                    >
+                      Calculate
+                    </button>
+                  </div>
 
-                {/* Coordinate Inputs: Min Lon, Min Lat, Max Lon, Max Lat */}
-                <div className="grid grid-cols-4 gap-1">
-                  {(['Min Lon (W)', 'Min Lat (S)', 'Max Lon (E)', 'Max Lat (N)'] as const).map(
-                    (label, i) => (
-                      <div key={label} className="flex flex-col gap-0.5">
-                        <span className={`text-[8px] font-mono truncate ${isLight ? 'text-gray-600' : 'text-[#6B7280]'}`}>
-                          {label}
-                        </span>
-                        <input
-                          type="text"
-                          value={customBbox[i]}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const next = [...customBbox] as [string, string, string, string];
-                            next[i] = val;
-                            onCustomBboxChange(next);
+                  {/* Square Span Presets: 15km, 25km (standard 10m native), 35km, 50km (max 2,500km2) */}
+                  <div className="flex items-center justify-between text-[8px] font-mono">
+                    <span className={isLight ? 'text-gray-600' : 'text-[#8E95A5]'}>
+                      Square Span:
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {([15, 25, 35, 50] as const).map((km) => (
+                        <button
+                          key={km}
+                          type="button"
+                          onClick={() => {
+                            setBoxSpanKm(km);
+                            handleApplyPointAoi(pointInput, km);
                           }}
-                          className={`border px-1 py-1 text-[10px] font-mono text-center rounded outline-none transition-colors ${
-                            isLight
-                              ? 'bg-white border-black/30 text-[#14161B] font-semibold focus:border-[#FF6600]'
-                              : 'bg-[#181B22] border-[#2D323E] text-white focus:border-[#FF6600]'
+                          className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                            boxSpanKm === km
+                              ? 'border-[#FF6600] bg-[#FF6600]/20 text-[#FF6600] font-bold'
+                              : isLight
+                              ? 'border-black/15 text-gray-700 hover:text-black'
+                              : 'border-white/10 text-[#8E95A5] hover:text-white'
                           }`}
-                        />
-                      </div>
-                    ),
+                        >
+                          {km} km
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {pointParseError && (
+                    <div className="text-[8px] font-mono text-red-400">
+                      {pointParseError}
+                    </div>
                   )}
                 </div>
 
-                {/* Area Metrics & Downsampling Badge */}
-                <div className="flex items-center justify-between text-[8px] font-mono px-1 pt-0.5">
-                  <span className={`flex items-center gap-1 ${isAreaExceeded ? 'text-red-400 font-bold' : 'text-[#8E95A5]'}`}>
-                    <Maximize2 size={9} /> Area: {areaKm2} km² {isAreaExceeded && '(EXCEEDS 2,500 km² CAP)'}
-                  </span>
-                  <span className="text-[#FF6600] font-semibold">
-                    Resolution: {resolutionInfo.res} ({resolutionInfo.badge})
-                  </span>
-                </div>
+                {/* 4-Corner Bounding Box Coordinates with Map Draw Sync */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label
+                      className={`text-[9px] font-mono uppercase flex items-center gap-1 ${
+                        isLight ? 'text-[#1F2937] font-semibold' : 'text-[#8E95A5]'
+                      }`}
+                    >
+                      <Crosshair size={10} className="text-[#FF6600]" /> Bounding Box [W, S, E, N]:
+                    </label>
 
-                {/* Safeguard Warning Banner if Area Exceeded */}
-                {isAreaExceeded && (
-                  <div className="flex items-start gap-1.5 p-1.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 font-mono text-[9px] leading-tight">
-                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                    <span>
-                      Selected area is too large for real-time scan ({areaKm2} km²). Please narrow your Area of Interest under 2,500 km² (~50 km × 50 km).
+                    {/* Interactive Map Draw Button */}
+                    <button
+                      onClick={() => {
+                        soundEngine.playBubbleHover();
+                        onToggleDrawBox();
+                      }}
+                      className={`flex items-center gap-1 px-2 py-0.5 font-mono text-[9px] font-bold border rounded transition-all cursor-pointer ${
+                        isDrawingBox
+                          ? 'border-[#FF6600] bg-[#FF6600] text-black shadow-[0_0_8px_rgba(255,102,0,0.6)] animate-pulse'
+                          : 'border-[#FF6600]/40 bg-[#FF6600]/10 text-[#FF6600] hover:bg-[#FF6600]/20'
+                      }`}
+                      title="Click and drag on the map to define a target surveillance area"
+                    >
+                      <Pencil size={9} />
+                      {isDrawingBox ? 'DRAWING (DRAG MAP)...' : 'DRAW AOI ON MAP'}
+                    </button>
+                  </div>
+
+                  {/* Coordinate Inputs: Min Lon, Min Lat, Max Lon, Max Lat */}
+                  <div className="grid grid-cols-4 gap-1">
+                    {(['Min Lon (W)', 'Min Lat (S)', 'Max Lon (E)', 'Max Lat (N)'] as const).map(
+                      (label, i) => (
+                        <div key={label} className="flex flex-col gap-0.5">
+                          <span className={`text-[8px] font-mono truncate ${isLight ? 'text-gray-600' : 'text-[#6B7280]'}`}>
+                            {label}
+                          </span>
+                          <input
+                            type="text"
+                            value={customBbox[i]}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const next = [...customBbox] as [string, string, string, string];
+                              next[i] = val;
+                              onCustomBboxChange(next);
+                            }}
+                            className={`border px-1 py-1 text-[10px] font-mono text-center rounded outline-none transition-colors ${
+                              isLight
+                                ? 'bg-white border-black/30 text-[#14161B] font-semibold focus:border-[#FF6600]'
+                                : 'bg-[#181B22] border-[#2D323E] text-white focus:border-[#FF6600]'
+                            }`}
+                          />
+                        </div>
+                      ),
+                    )}
+                  </div>
+
+                  {/* Area Metrics & Downsampling Badge */}
+                  <div className="flex items-center justify-between text-[8px] font-mono px-1 pt-0.5">
+                    <span className={`flex items-center gap-1 ${isAreaExceeded ? 'text-red-400 font-bold' : 'text-[#8E95A5]'}`}>
+                      <Maximize2 size={9} /> Area: {areaKm2} km² {isAreaExceeded && '(EXCEEDS 2,500 km² CAP)'}
+                    </span>
+                    <span className="text-[#FF6600] font-semibold">
+                      Resolution: {resolutionInfo.res} ({resolutionInfo.badge})
                     </span>
                   </div>
-                )}
+
+                  {/* Safeguard Warning Banner if Area Exceeded */}
+                  {isAreaExceeded && (
+                    <div className="flex items-start gap-1.5 p-1.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 font-mono text-[9px] leading-tight">
+                      <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                      <span>
+                        Selected area is too large for real-time scan ({areaKm2} km²). Please narrow your Area of Interest under 2,500 km² (~50 km × 50 km).
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
