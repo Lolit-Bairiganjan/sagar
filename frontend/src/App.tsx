@@ -6,7 +6,6 @@ import NavSidebar from './components/NavSidebar';
 import MapView from './components/MapView';
 import Sidebar from './components/Sidebar';
 import IntelligencePanel from './components/IntelligencePanel';
-import BottomTimeline from './components/BottomTimeline';
 import StartupScreen from './components/StartupScreen';
 import LandingPage from './components/LandingPage';
 import AmbientBackground from './components/AmbientBackground';
@@ -30,6 +29,8 @@ import type {
   Investigation,
   SystemStatus,
   HistoricalSpillDetail,
+  SurveillanceScanResult,
+  LatLng,
 } from './types';
 
 const LOADING_MESSAGES = [
@@ -86,11 +87,12 @@ export default function App() {
   const [ocean, setOcean] = useState<OceanographicData | null>(null);
   const [investigation, setInvestigation] = useState<Investigation | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [surveillanceResult, setSurveillanceResult] = useState<SurveillanceScanResult | null>(null);
 
   const [selectedVesselId, setSelectedVesselId] = useState<string | null>(null);
   const [centerTargetVessel, setCenterTargetVessel] = useState<Vessel | null>(null);
 
-  const [activeSection, setActiveSection] = useState('Live Surveillance');
+  const [activeSection, setActiveSection] = useState('AIS Traffic');
   const [navCollapsed, setNavCollapsed] = useState(false);
 
   useEffect(() => {
@@ -215,6 +217,116 @@ export default function App() {
     }
   }, []);
 
+  const handleSurveillanceResult = useCallback((result: SurveillanceScanResult | null) => {
+    setSurveillanceResult(result);
+    if (!result) return;
+
+    // If result contains detected spills, update spill state
+    if (result.spills && result.spills.length > 0) {
+      const firstSpill = result.spills[0];
+      const coords = firstSpill.spill_polygon_geojson.coordinates[0];
+      const ring: LatLng[] = coords.map(([lon, lat]) => ({ lat, lng: lon }));
+      setSpill((prev) => ({
+        id: `surv-${result.zone_key}-${Date.now()}`,
+        status: 'ACTIVE_INVESTIGATION',
+        detectionConfidencePct: Math.round(firstSpill.confidence * 100),
+        estimatedAreaKm2: firstSpill.area_km2,
+        estimatedAgeHours: prev?.estimatedAgeHours ?? 6.0,
+        detectionSource: 'Copernicus Sentinel-1 SAR',
+        observedAtUtc: firstSpill.detected_at,
+        centroid: { lat: firstSpill.centroid_lat, lng: firstSpill.centroid_lon },
+        polygon: { ring },
+        origin: prev?.origin ?? {
+          location: { lat: firstSpill.centroid_lat, lng: firstSpill.centroid_lon },
+          estimatedAtUtc: firstSpill.detected_at,
+          confidencePct: 90,
+        },
+        drift: prev?.drift ?? { backtrack: [], forecast: [] },
+      }));
+    }
+
+    // Map suspects into vessels
+    const allSuspects =
+      result.suspects && result.suspects.length > 0
+        ? result.suspects
+        : result.max_suspect
+        ? [
+            {
+              mmsi: result.max_suspect.mmsi,
+              name: result.max_suspect.name,
+              distance_km: result.max_suspect.distance_km,
+              hours_before_detection: result.max_suspect.hours_before,
+              proximity_score: result.max_suspect.factors?.proximity_score ?? 90,
+              time_score: result.max_suspect.factors?.time_score ?? 85,
+              type_score: result.max_suspect.factors?.type_score ?? 75,
+              has_suspicious_gap: (result.max_suspect.factors?.gap_score ?? 0) > 40,
+              gap_score: result.max_suspect.factors?.gap_score ?? 0,
+              has_speed_anomaly: (result.max_suspect.factors?.speed_anomaly_score ?? 0) > 40,
+              speed_anomaly_score: result.max_suspect.factors?.speed_anomaly_score ?? 0,
+              is_legitimately_docked: false,
+              final_score:
+                result.max_suspect.final_score || result.max_suspect.probability_pct,
+              flags: result.max_suspect.flags || ['Probable Source'],
+            },
+          ]
+        : [];
+
+    if (allSuspects.length > 0) {
+      const centerLat =
+        result.spills?.[0]?.centroid_lat ??
+        (result.aoi_bbox ? (result.aoi_bbox[1] + result.aoi_bbox[3]) / 2 : 0);
+      const centerLon =
+        result.spills?.[0]?.centroid_lon ??
+        (result.aoi_bbox ? (result.aoi_bbox[0] + result.aoi_bbox[2]) / 2 : 0);
+
+      const mappedVessels: Vessel[] = allSuspects.map((cand, idx) => {
+        const scorePct =
+          cand.final_score > 1 ? cand.final_score : Math.round(cand.final_score * 100);
+        return {
+          id: `v-${cand.mmsi}`,
+          name: cand.name || `VESSEL ${cand.mmsi}`,
+          imo: String(cand.mmsi),
+          type: (cand.flags && cand.flags[0]) || 'Commercial Vessel',
+          flag: 'TRACKED',
+          speedKn: cand.has_speed_anomaly ? 3.2 : 11.4,
+          headingDeg: 240,
+          draftM: 12.0,
+          currentLocation: { lat: centerLat + idx * 0.015, lng: centerLon + idx * 0.015 },
+          isSuspect: true,
+          rank: idx + 1,
+          attribution: {
+            attributionScorePct: scorePct,
+            distanceNm: Number((cand.distance_km * 0.539957).toFixed(1)),
+            timeDifferenceMinutes: Math.round(cand.hours_before_detection * 60),
+            trajectoryMatchPct: Math.round(cand.proximity_score),
+            behaviorAnomaly: cand.has_suspicious_gap ? 'HIGH' : 'LOW',
+            risk: scorePct >= 80 ? 'CRITICAL' : scorePct >= 50 ? 'HIGH' : 'MEDIUM',
+            breakdown: {
+              spatialProximity: { score: Math.round(cand.proximity_score), max: 100 },
+              temporalCorrelation: { score: Math.round(cand.time_score), max: 100 },
+              trajectoryMatch: { score: Math.round(cand.proximity_score), max: 100 },
+              behaviorAnomaly: { score: cand.has_suspicious_gap ? 90 : 20, max: 100 },
+            },
+            correlation: {
+              spatialPct: Math.round(cand.proximity_score),
+              temporalPct: Math.round(cand.time_score),
+              trajectoryPct: Math.round(cand.proximity_score),
+              behaviorPct: cand.has_suspicious_gap ? 90 : 20,
+              overallPct: scorePct,
+            },
+          },
+          anomalyEvents: (cand.flags || []).map((flag) => ({
+            timestampUtc: result.timestamp || new Date().toISOString(),
+            label: 'FORENSIC FLAG',
+            description: flag,
+            severity: 'WARNING',
+          })),
+        };
+      });
+      setVessels(mappedVessels);
+    }
+  }, []);
+
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
   const isLight = themeMode === 'light';
   const [viewMode, setViewMode] = useState<'landing' | 'loading' | 'console'>('landing');
@@ -301,60 +413,58 @@ export default function App() {
                   isLight={isLight}
                   onSelectHistoricalSpill={handleSelectHistoricalSpill}
                   onNavigateSection={setActiveSection}
+                  onSurveillanceResult={handleSurveillanceResult}
                 />
               </SectionTransition>
             )}
           </main>
 
           {/* Single Consolidated Right Dock: flips between Suspects List and Selected Vessel Dossier */}
-          {activeSection !== 'Live Surveillance' && (
-            <div
-              className={`hidden w-80 shrink-0 border-l transition-colors lg:block relative z-20 overflow-hidden ${
-                isLight ? 'border-[#CBD0DA] bg-[#EDEFF4]' : 'border-[#252932] bg-[#181B22]'
-              }`}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                {selectedVessel ? (
-                  <motion.div
-                    key={`intel-${selectedVessel.id}`}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.22 }}
-                    className="h-full w-full"
-                  >
-                    <IntelligencePanel
-                      spill={spill}
-                      satellite={satellite}
-                      ocean={ocean}
-                      selectedVessel={selectedVessel}
-                      onDeselect={handleDeselect}
-                      isLight={isLight}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="sidebar-suspects-list"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.22 }}
-                    className="h-full w-full"
-                  >
-                    <Sidebar
-                      vessels={vessels}
-                      selectedVesselId={selectedVesselId}
-                      onSelectVessel={handleSelectVessel}
-                      isLight={isLight}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+          <div
+            className={`hidden w-80 shrink-0 border-l transition-colors lg:block relative z-20 overflow-hidden ${
+              isLight ? 'border-[#CBD0DA] bg-[#EDEFF4]' : 'border-[#252932] bg-[#181B22]'
+            }`}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {selectedVessel ? (
+                <motion.div
+                  key={`intel-${selectedVessel.id}`}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.22 }}
+                  className="h-full w-full"
+                >
+                  <IntelligencePanel
+                    spill={spill}
+                    satellite={satellite}
+                    ocean={ocean}
+                    selectedVessel={selectedVessel}
+                    onDeselect={handleDeselect}
+                    isLight={isLight}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="sidebar-suspects-list"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.22 }}
+                  className="h-full w-full"
+                >
+                  <Sidebar
+                    vessels={vessels}
+                    selectedVesselId={selectedVesselId}
+                    onSelectVessel={handleSelectVessel}
+                    isLight={isLight}
+                    surveillanceResult={surveillanceResult}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-
-        <BottomTimeline isLight={isLight} />
       </div>
     </div>
   );
