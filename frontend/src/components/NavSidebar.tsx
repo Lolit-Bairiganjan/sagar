@@ -2,12 +2,8 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
   Radar,
-  Droplets,
-  ShipWheel,
-  Satellite,
   ChevronsLeft,
   ChevronsRight,
-  ExternalLink,
 } from 'lucide-react';
 import type { SystemStatus } from '../types';
 import { soundEngine } from '../utils/soundEngine';
@@ -22,32 +18,12 @@ export const NAV_ITEMS: NavItem[] = [
   {
     label: 'Overview',
     icon: LayoutDashboard,
-    referenceUrl: 'https://en.wikipedia.org/wiki/Maritime_domain_awareness',
-  },
-  {
-    label: 'Live Surveillance',
-    icon: Radar,
-    referenceUrl: 'https://www.marinetraffic.com/',
-  },
-  {
-    label: 'Spill Analysis',
-    icon: Droplets,
-    referenceUrl: 'https://www.itopf.org/knowledge-resources/documents-guides/',
-  },
-  {
-    label: 'Vessel Attribution',
-    icon: ShipWheel,
-    referenceUrl: 'https://www.equasis.org/',
+    referenceUrl: '',
   },
   {
     label: 'AIS Traffic',
     icon: Radar,
-    referenceUrl: 'https://www.marinetraffic.com/en/ais/home',
-  },
-  {
-    label: 'Satellite Imagery',
-    icon: Satellite,
-    referenceUrl: 'https://apps.sentinel-hub.com/eo-browser/',
+    referenceUrl: '',
   },
 ];
 
@@ -98,7 +74,6 @@ export default function NavSidebar({
               key={item.label}
               onClick={() => {
                 onSelect(item.label);
-                window.open(item.referenceUrl, '_blank', 'noopener,noreferrer');
               }}
               onMouseEnter={() => soundEngine.playBubbleHover()}
               whileHover={{ x: collapsed ? 0 : 3 }}
@@ -130,7 +105,6 @@ export default function NavSidebar({
               {!collapsed && (
                 <span className="relative z-10 flex min-w-0 flex-1 items-center justify-between gap-1.5">
                   <span className="truncate font-mono text-xs tracking-wide">{item.label}</span>
-                  <ExternalLink size={11} className="shrink-0 opacity-40 group-hover:opacity-80" />
                 </span>
               )}
             </motion.button>

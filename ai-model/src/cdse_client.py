@@ -87,6 +87,7 @@ class CopernicusCDSEClient:
         to_date: Optional[str] = None,
         width: int = 832,
         height: int = 832,
+        mosaicking_order: Optional[str] = None,
     ) -> str:
         """
         Fetches an ortho-calibrated 3-band GeoTIFF (VV, VH, VV-VH) from Copernicus Process API.
@@ -98,8 +99,11 @@ class CopernicusCDSEClient:
             to_date: ISO 8601 end timestamp (defaults to current UTC time)
             width: Image width in pixels (multiple of 416 recommended)
             height: Image height in pixels (multiple of 416 recommended)
+            mosaicking_order: "leastRecent" (scan forward from from_date) or "mostRecent" (scan backward from to_date)
         """
         from datetime import datetime, timezone, timedelta
+
+        has_explicit_from_date = bool(from_date)
 
         # Ensure from_date and to_date are formatted as full ISO 8601 strings (YYYY-MM-DDTHH:MM:SSZ)
         if not to_date:
@@ -122,6 +126,11 @@ class CopernicusCDSEClient:
 
         min_lon, min_lat, max_lon, max_lat = bbox
 
+        # When an explicit start date (from_date) is provided (e.g. specific observation start date or historical window),
+        # use "leastRecent" so Copernicus finds the earliest pass occurring on/after that start date (T-0 forward).
+        # When live monitoring without an explicit start date, use "mostRecent" to retrieve the latest scene.
+        order = mosaicking_order or ("leastRecent" if has_explicit_from_date else "mostRecent")
+
         payload = {
             "input": {
                 "bounds": {
@@ -135,6 +144,7 @@ class CopernicusCDSEClient:
                             "timeRange": {"from": from_date, "to": to_date},
                             "acquisitionMode": "IW",
                             "polarization": "DV",
+                            "mosaickingOrder": order,
                         },
                         "processing": {
                             "backscatterCoefficient": "SIGMA0_ELLIPSOID",

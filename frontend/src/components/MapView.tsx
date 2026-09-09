@@ -1,13 +1,15 @@
 import { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents, Polygon as RLPolygon, Tooltip as RLTooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents, Polygon as RLPolygon, Tooltip as RLTooltip, CircleMarker as RLCircleMarker, Polyline as RLPolyline } from 'react-leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Droplets, Route, TrendingUp, Radio, Satellite as SatelliteIcon } from 'lucide-react';
+import { Layers, Droplets, Route, Radio, Satellite as SatelliteIcon } from 'lucide-react';
 import SpillLayer from './SpillLayer';
 import ShipTrackLayer from './ShipTrackLayer';
 import SurveillancePanel from './SurveillancePanel';
 import HistoricalSpillsPanel from './HistoricalSpillsPanel';
-import type { Spill, Vessel, VesselTrack, SatelliteObservation, SurveillanceScanResult, HistoricalSpillDetail } from '../types';
+import type { Spill, Vessel, VesselTrack, SatelliteObservation, SurveillanceScanResult, HistoricalSpillDetail, HistoricalWeather } from '../types';
 import { soundEngine } from '../utils/soundEngine';
+import { calculateReverseDrift, type ReverseDriftResult } from '../utils/driftEngine';
+import { getHistoricalWeather } from '../api/client';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 const CARTO_BASEMAP_KEY = import.meta.env.VITE_CARTO_BASEMAP_KEY as string | undefined;
@@ -31,7 +33,6 @@ const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">
 interface LayerToggles {
   spill: boolean;
   drift: boolean;
-  forecast: boolean;
   ais: boolean;
   satellite: boolean;
 }
@@ -233,6 +234,7 @@ interface MapViewProps {
   isLight?: boolean;
   onSelectHistoricalSpill?: (detail: HistoricalSpillDetail) => void;
   onNavigateSection?: (section: string) => void;
+  onSurveillanceResult?: (result: SurveillanceScanResult | null) => void;
 }
 
 export default function MapView({
@@ -248,16 +250,71 @@ export default function MapView({
   isLight = false,
   onSelectHistoricalSpill,
   onNavigateSection,
+  onSurveillanceResult,
 }: MapViewProps) {
   const [toggles, setToggles] = useState<LayerToggles>({
     spill: true,
     drift: true,
-    forecast: true,
     ais: true,
     satellite: true,
   });
   const [tileError, setTileError] = useState(false);
   const [latestScan, setLatestScan] = useState<SurveillanceScanResult | null>(null);
+  const [selectedSpillIdx, setSelectedSpillIdx] = useState<number>(0);
+  const [slickWeather, setSlickWeather] = useState<HistoricalWeather | null>(null);
+  const [slickDrift, setSlickDrift] = useState<ReverseDriftResult | null>(null);
+
+  // Automated Weather Fetch & Reverse-Drift Calculation for the Active Surveillance Slick
+  useEffect(() => {
+    if (!latestScan?.spills || latestScan.spills.length === 0) {
+      setSlickWeather(null);
+      setSlickDrift(null);
+      return;
+    }
+
+    const safeIdx = Math.max(0, Math.min(selectedSpillIdx, latestScan.spills.length - 1));
+    const activeSlick = latestScan.spills[safeIdx] || latestScan.spills[0];
+    if (!activeSlick) return;
+
+    let cancelled = false;
+    async function updateDrift() {
+      try {
+        const obsDate = activeSlick.detected_at
+          ? activeSlick.detected_at.slice(0, 10)
+          : latestScan?.timestamp
+          ? latestScan.timestamp.slice(0, 10)
+          : undefined;
+
+        const weather = await getHistoricalWeather(
+          activeSlick.centroid_lat,
+          activeSlick.centroid_lon,
+          obsDate
+        );
+        if (cancelled) return;
+        setSlickWeather(weather);
+
+        const drift = calculateReverseDrift({
+          centroid: { lat: activeSlick.centroid_lat, lng: activeSlick.centroid_lon },
+          observedAtUtc: activeSlick.detected_at || latestScan?.timestamp || new Date().toISOString(),
+          windSpeedKmh: weather.wind_speed_kmh,
+          windDirectionDeg: weather.wind_direction_deg,
+          currentSpeedKmh: weather.current_speed_kmh,
+          currentDirectionDeg: weather.current_direction_deg,
+          driftHours: 6,
+        });
+
+        if (cancelled) return;
+        setSlickDrift(drift);
+      } catch (err) {
+        console.warn('Live reverse-drift calculation error:', err);
+      }
+    }
+
+    updateDrift();
+    return () => {
+      cancelled = true;
+    };
+  }, [latestScan, selectedSpillIdx]);
   const [targetAoi, setTargetAoi] = useState<{
     bbox: [number, number, number, number];
     label: string;
@@ -344,29 +401,27 @@ export default function MapView({
               satellite={satellite}
               showSpill={toggles.spill}
               showDrift={toggles.drift}
-              showForecast={toggles.forecast}
+              showForecast={false}
               showSatelliteFootprint={toggles.satellite}
             />
           </>
         )}
 
-        {activeSection === 'Live Surveillance' && <FitToScan scan={latestScan} />}
+        {(activeSection === 'Live Surveillance' || activeSection === 'AIS Traffic') && <FitToScan scan={latestScan} />}
 
-        {activeSection !== 'Live Surveillance' && (
-          <ShipTrackLayer
-            vessels={vessels}
-            tracks={tracks}
-            selectedVesselId={selectedVesselId}
-            onSelectVessel={onSelectVessel}
-            showAis={toggles.ais}
-          />
-        )}
+        <ShipTrackLayer
+          vessels={vessels}
+          tracks={tracks}
+          selectedVesselId={selectedVesselId}
+          onSelectVessel={onSelectVessel}
+          showAis={toggles.ais}
+        />
 
         <CenterOnVessel vessel={centerTargetVessel} />
         <DeselectOnEmptyMap onEmptyClick={onEmptyMapClick} />
 
         {/* Live Surveillance Viewport Auto-Focus Controllers */}
-        {activeSection === 'Live Surveillance' && (
+        {(activeSection === 'Live Surveillance' || activeSection === 'AIS Traffic') && (
           <FitToAoi bbox={targetAoi?.bbox ?? null} />
         )}
         <FitToScan scan={latestScan} />
@@ -375,7 +430,7 @@ export default function MapView({
         <BoxDrawHandler isDrawing={isDrawingBox} onBoxDrawn={handleBoxDrawn} />
 
         {/* Real-time Target Surveillance AOI Bounding Box on Map */}
-        {(activeSection === 'Live Surveillance' || toggles.satellite) && targetAoi && (
+        {(activeSection === 'Live Surveillance' || activeSection === 'AIS Traffic' || toggles.satellite) && targetAoi && (
           <RLPolygon
             key={`target-aoi-${targetAoi.bbox.join('-')}`}
             positions={[
@@ -406,23 +461,32 @@ export default function MapView({
           const coords: [number, number][] = detectedSpill.spill_polygon_geojson.coordinates[0].map(
             ([lon, lat]: [number, number]) => [lat, lon] as [number, number]
           );
+          const isSelected = idx === selectedSpillIdx;
           return (
             <RLPolygon
               key={`surv-spill-${idx}`}
               positions={coords}
+              eventHandlers={{
+                click: () => {
+                  soundEngine.playBubbleHover();
+                  setSelectedSpillIdx(idx);
+                },
+              }}
               pathOptions={{
-                color: '#EF4444',
-                weight: 2,
-                opacity: 0.9,
-                fillColor: '#EF4444',
-                fillOpacity: 0.35,
+                color: isSelected ? '#FF6600' : '#EF4444',
+                weight: isSelected ? 3 : 2,
+                opacity: isSelected ? 1.0 : 0.75,
+                fillColor: isSelected ? '#FF6600' : '#EF4444',
+                fillOpacity: isSelected ? 0.45 : 0.25,
               }}
             >
               <RLTooltip direction="top" sticky>
-                <div className="font-mono text-[11px] font-bold text-red-400 p-1">
-                  🚨 OIL SLICK DETECTED
+                <div className="font-mono text-[11px] font-bold p-1">
+                  <div className={isSelected ? 'text-[#FF6600]' : 'text-red-400'}>
+                    {isSelected ? `★ SELECTED SLICK #${idx + 1}` : `🚨 SLICK #${idx + 1} (Click to inspect)`}
+                  </div>
                   <div className="text-[9px] text-white font-normal mt-0.5">
-                    Area: <span className="text-red-400 font-bold">{detectedSpill.area_km2} km²</span>
+                    Area: <span className="text-red-400 font-bold">{detectedSpill.area_km2.toFixed(2)} km²</span>
                   </div>
                   <div className="text-[9px] text-white font-normal">
                     Confidence: <span className="text-[#FF6600] font-bold">{(detectedSpill.confidence * 100).toFixed(1)}%</span>
@@ -432,6 +496,46 @@ export default function MapView({
             </RLPolygon>
           );
         })}
+
+        {/* Live Surveillance: Reverse-Drift Backtrack Trajectory (controlled by DRIFT toggle) */}
+        {toggles.drift && slickDrift && (
+          <>
+            <RLPolyline
+              positions={slickDrift.backtrack.map((node) => [node.location.lat, node.location.lng])}
+              pathOptions={{
+                color: '#FF6600',
+                weight: 2.5,
+                dashArray: '6 6',
+                opacity: 0.9,
+              }}
+            />
+            {/* Estimated discharge origin marker (T-6h) */}
+            <RLCircleMarker
+              center={[slickDrift.origin.lat, slickDrift.origin.lng]}
+              radius={7}
+              pathOptions={{
+                color: '#FF6600',
+                fillColor: '#FF6600',
+                fillOpacity: 0.9,
+                weight: 2,
+              }}
+            >
+              <RLTooltip direction="top" permanent>
+                <div className="font-mono text-[9px] text-[#FF6600] font-bold p-0.5 leading-tight">
+                  📍 ESTIMATED ORIGIN (T-{slickDrift.driftHours}h)
+                  <div className="text-[8px] text-white font-normal">
+                    {slickDrift.origin.lat.toFixed(4)}°, {slickDrift.origin.lng.toFixed(4)}°
+                  </div>
+                  <div className="text-[7.5px] text-[#8E95A5]">
+                    Backtrack: {slickDrift.totalDriftDistanceKm} km upstream
+                  </div>
+                </div>
+              </RLTooltip>
+            </RLCircleMarker>
+          </>
+        )}
+
+
 
         {/* Scanned zone bounding box (controlled by FOOTPRINT toggle) */}
         {toggles.satellite && latestScan && (
@@ -452,6 +556,44 @@ export default function MapView({
             }}
           />
         )}
+
+        {/* Scanned zone top AIS suspect vessel marker */}
+        {toggles.ais && latestScan?.max_suspect && (latestScan?.spills?.[selectedSpillIdx] || latestScan?.spills?.[0]) && (() => {
+          const s = latestScan.spills[selectedSpillIdx] || latestScan.spills[0];
+          const offset = Math.max(0.008, (latestScan.max_suspect.distance_km || 1.0) / 111.0);
+          const vLat = s.centroid_lat + offset * 0.7;
+          const vLon = s.centroid_lon + offset * 0.7;
+          const isMatch = latestScan.ground_truth_comparison?.is_match;
+
+          return (
+            <RLCircleMarker
+              center={[vLat, vLon]}
+              radius={9}
+              pathOptions={{
+                color: isMatch ? '#10B981' : '#EF4444',
+                fillColor: isMatch ? '#10B981' : '#EF4444',
+                fillOpacity: 0.85,
+                weight: 2,
+              }}
+            >
+              <RLTooltip direction="top" permanent>
+                <div className="font-mono text-[9px] p-0.5 leading-tight">
+                  <div className="font-bold flex items-center gap-1 text-white">
+                    🚢 {latestScan.max_suspect.name}
+                  </div>
+                  <div className="text-[8px] text-[#8E95A5]">
+                    MMSI: {latestScan.max_suspect.mmsi} • {latestScan.max_suspect.probability_pct.toFixed(1)}% Max Prob
+                  </div>
+                  {isMatch && (
+                    <div className="text-[8px] text-emerald-400 font-bold mt-0.5">
+                      ★ Confirmed Ground Truth Match
+                    </div>
+                  )}
+                </div>
+              </RLTooltip>
+            </RLCircleMarker>
+          );
+        })()}
       </MapContainer>
 
       {/* Layer toggle control */}
@@ -468,7 +610,6 @@ export default function MapView({
           </span>
           <ToggleButton active={toggles.spill} onClick={() => toggle('spill')} icon={Droplets} label="Spill" isLight={isLight} />
           <ToggleButton active={toggles.drift} onClick={() => toggle('drift')} icon={Route} label="Backtrack" isLight={isLight} />
-          <ToggleButton active={toggles.forecast} onClick={() => toggle('forecast')} icon={TrendingUp} label="Forecast" isLight={isLight} />
           <ToggleButton active={toggles.ais} onClick={() => toggle('ais')} icon={Radio} label="AIS" isLight={isLight} />
           <ToggleButton
             active={toggles.satellite}
@@ -488,17 +629,25 @@ export default function MapView({
       )}
 
       {/* Section 1: Live Surveillance Panel with Interactive Draw & AOI Sync */}
-      {activeSection === 'Live Surveillance' && (
+      {(activeSection === 'Live Surveillance' || activeSection === 'AIS Traffic') && (
         <div className="pointer-events-none absolute left-3 top-16 z-[400]">
           <SurveillancePanel
             isLight={isLight}
-            onScanComplete={(result) => setLatestScan(result)}
+            onScanComplete={(result) => {
+              setLatestScan(result);
+              setSelectedSpillIdx(0);
+              onSurveillanceResult?.(result);
+            }}
             customBbox={customBbox}
             onCustomBboxChange={setCustomBbox}
             isDrawingBox={isDrawingBox}
             onToggleDrawBox={() => setIsDrawingBox((b) => !b)}
             onOpenHistory={() => onNavigateSection?.('Spill Analysis')}
             onTargetAoiChange={(bbox, label) => setTargetAoi({ bbox, label })}
+            selectedSpillIdx={selectedSpillIdx}
+            onSelectSpillIdx={(idx) => setSelectedSpillIdx(idx)}
+            slickWeather={slickWeather}
+            slickDrift={slickDrift}
           />
         </div>
       )}

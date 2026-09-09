@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import investigations, spills, surveillance
+from app.routes import investigations, spills, surveillance, weather
 
 app = FastAPI(title="SIH26143 — Maritime Oil Spill & AIS Correlation API")
 
@@ -19,6 +19,7 @@ app.include_router(spills.router)
 app.include_router(spills.router, prefix="/api")
 app.include_router(surveillance.router)
 app.include_router(surveillance.router, prefix="/api")
+app.include_router(weather.router)
 
 
 @app.get("/health")

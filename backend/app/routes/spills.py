@@ -22,7 +22,11 @@ def list_spills(limit: int = 50):
 
 
 @router.get("/spills/{spill_id}")
-def spill_detail(spill_id: int):
+def spill_detail(
+    spill_id: int,
+    origin_lat: Optional[float] = None,
+    origin_lon: Optional[float] = None,
+):
     """
     Returns full details for a historical spill:
     - GeoJSON polygon
@@ -39,9 +43,9 @@ def spill_detail(spill_id: int):
     if not data:
         raise HTTPException(status_code=404, detail=f"Spill {spill_id} not found")
 
-    # Fetch suspect vessels
+    # Fetch suspect vessels using passed or estimated origin
     try:
-        suspect_rows = get_suspects(spill_id)
+        suspect_rows = get_suspects(spill_id, origin_lat=origin_lat, origin_lon=origin_lon)
     except Exception:
         suspect_rows = []
 
@@ -56,11 +60,14 @@ def spill_detail(spill_id: int):
     centroid_lon = float(data.get("centroid_lon") or 0.0)
 
     # Origin point
-    origin_pt = data.get("estimated_origin_geojson")
-    if origin_pt and origin_pt.get("coordinates"):
-        origin_coords = {"lat": float(origin_pt["coordinates"][1]), "lng": float(origin_pt["coordinates"][0])}
+    if origin_lat is not None and origin_lon is not None:
+        origin_coords = {"lat": float(origin_lat), "lng": float(origin_lon)}
     else:
-        origin_coords = {"lat": centroid_lat, "lng": centroid_lon}
+        origin_pt = data.get("estimated_origin_geojson")
+        if origin_pt and origin_pt.get("coordinates"):
+            origin_coords = {"lat": float(origin_pt["coordinates"][1]), "lng": float(origin_pt["coordinates"][0])}
+        else:
+            origin_coords = {"lat": centroid_lat, "lng": centroid_lon}
 
     detected_at_dt = data.get("detected_at")
     if isinstance(detected_at_dt, datetime):
