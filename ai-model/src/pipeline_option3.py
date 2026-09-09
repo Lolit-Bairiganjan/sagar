@@ -32,7 +32,7 @@ def run_option3_pipeline(
     bbox: Tuple[float, float, float, float] = (71.25, 19.35, 71.55, 19.65),
     output_geotiff: str = "ai-model/outputs/option3_scene.tif",
     onnx_model_path: str = "ai-model/weight/best.onnx",
-    conf_threshold: float = 0.15,
+    conf_threshold: float = 0.08,
     use_live_cdse: bool = False,
     drill: bool = False,
     from_date: Optional[str] = None,
@@ -229,7 +229,7 @@ def main():
                         help="Bounding box: min_lon min_lat max_lon max_lat")
     parser.add_argument("--live", action="store_true", help="Query live Copernicus CDSE API")
     parser.add_argument("--drill", action="store_true", help="Run simulated emergency spill incident drill")
-    parser.add_argument("--conf", type=float, default=0.15, help="Confidence threshold")
+    parser.add_argument("--conf", type=float, default=0.08, help="Confidence threshold")
     parser.add_argument("--model", type=str, default="ai-model/weight/best.onnx", help="Path to ONNX weights")
     parser.add_argument("--from-date", type=str, default=None, help="Start observation date (ISO 8601 or YYYY-MM-DD)")
     parser.add_argument("--to-date", type=str, default=None, help="End observation date (ISO 8601 or YYYY-MM-DD)")
