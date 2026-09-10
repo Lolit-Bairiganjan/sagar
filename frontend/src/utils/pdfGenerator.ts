@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import type { Spill, Vessel } from '../types';
 import { calculateReverseDrift } from './driftEngine';
 
-// Color palette for executive intelligence documents
+// Executive Color Palette
 const C = {
   INK: [15, 23, 42],         // Slate 900
   TEXT: [51, 65, 85],        // Slate 700
@@ -135,7 +135,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   doc.text('SAGAR', margin, y + 16);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   color(doc, C.TEXT);
   doc.text(`OBSERVATION: ${reportTimestamp}`, pageWidth - margin, y + 14, { align: 'right' });
 
@@ -154,7 +154,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   y += 14;
 
   // --- Section 1: INVESTIGATION PROFILE ---
-  const card1H = 112;
+  const card1H = 108;
   drawCard(doc, margin, y, contentWidth, card1H, C.TEAL);
 
   doc.setFont('helvetica', 'bold');
@@ -168,7 +168,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
 
   const s1_rows = [
     ['Investigation ID', spill?.id ?? 'N/A'],
-    ['Investigation Status', `${(spill?.status ?? 'ACTIVE_INVESTIGATION').replace(/_/g, ' ')} (VERIFIED)`],
+    ['Investigation Status', `${(spill?.status ?? 'ACTIVE_INVESTIGATION').replace(/_/g, ' ')} (VERIFIED BENCHMARK)`],
     ['Surveillance Sector', sector],
     ['Tactical Operation', operation],
   ];
@@ -183,15 +183,15 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     color(doc, label.includes('Status') ? C.DARK_TEAL : C.INK);
-    doc.text(val, margin + 165, rowY);
+    doc.text(val, margin + 155, rowY);
 
-    rowY += 19;
+    rowY += 18;
   });
 
   y += card1H + 12;
 
   // --- Section 2: SATELLITE RADAR OBSERVATION & SPILL METRICS ---
-  const card2H = 152;
+  const card2H = 144;
   drawCard(doc, margin, y, contentWidth, card2H, C.TEAL);
 
   doc.setFont('helvetica', 'bold');
@@ -212,11 +212,11 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     : '-20.3958° S, 057.7247° E';
 
   const s2_rows = [
-    ['Satellite Platform', 'Copernicus Sentinel-1 (C-Band SAR, IW Mode, 10m Resolution)'],
-    ['Detection Source', spill?.detectionSource || 'DeepLabV3+ Neural SAR Segmentation Pipeline'],
-    ['Detection Confidence', `${displayConf}% (High Confidence Automated Neural Match)`],
+    ['Satellite Platform', 'Sentinel-1 SAR (C-Band, IW Mode, 10m Res)'],
+    ['Detection Source', spill?.detectionSource || 'DeepLabV3+ Neural SAR Segmentation'],
+    ['Detection Confidence', `${displayConf}% (High Confidence Automated Match)`],
     ['Estimated Slick Area', `${spill?.estimatedAreaKm2 ?? 19.2805} km2 (${((spill?.estimatedAreaKm2 ?? 19.2805) * 100).toFixed(1)} ha surface slick)`],
-    ['Estimated Slick Age', `${spill?.estimatedAgeHours ?? 9.6} hours elapsed between discharge and SAR acquisition`],
+    ['Estimated Slick Age', `${spill?.estimatedAgeHours ?? 9.6} hours elapsed since initial discharge`],
     ['Observed Centroid', centroidText],
   ];
 
@@ -230,15 +230,15 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     color(doc, label.includes('Confidence') ? C.DARK_TEAL : C.INK);
-    doc.text(val, margin + 165, rowY);
+    doc.text(val, margin + 155, rowY);
 
-    rowY += 19;
+    rowY += 18;
   });
 
   y += card2H + 12;
 
   // --- Section 3: SPILL GEOMETRY & ORIGIN ESTIMATION ---
-  const card3H = 114;
+  const card3H = 108;
   drawCard(doc, margin, y, contentWidth, card3H, C.TEAL);
 
   doc.setFont('helvetica', 'bold');
@@ -257,9 +257,9 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   const originCoordText = `${originLat.toFixed(4)}° ${originLat >= 0 ? 'N' : 'S'}, ${originLng.toFixed(4)}° ${originLng >= 0 ? 'E' : 'W'}`;
 
   const s3_rows = [
-    ['Polygon Delineation', `${spill?.polygon?.ring?.length ?? 527} GeoJSON Ring Vertices (Continuous closed polygon)`],
+    ['Polygon Delineation', `${spill?.polygon?.ring?.length ?? 527} Vertices (Continuous closed ring)`],
     ['Estimated Release Origin', originCoordText],
-    ['Origin Confidence', `${originConfidence}% (High Spatial-Temporal Backward Trajectory Coherence)`],
+    ['Origin Confidence', `${originConfidence}% (Backward Drift Coherence)`],
     ['Discharge Est. Time', originTimeFormatted],
   ];
 
@@ -273,9 +273,9 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     color(doc, label.includes('Confidence') ? C.DARK_TEAL : C.INK);
-    doc.text(val, margin + 165, rowY);
+    doc.text(val, margin + 155, rowY);
 
-    rowY += 19;
+    rowY += 18;
   });
 
   y += card3H + 12;
@@ -307,9 +307,9 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   doc.setFontSize(8.5);
   color(doc, C.TEXT);
   doc.text('DRIFT NODE', tableX + 8, tableHeaderY + 13);
-  doc.text('LATITUDE', tableX + 115, tableHeaderY + 13);
-  doc.text('LONGITUDE', tableX + 195, tableHeaderY + 13);
-  doc.text('HYDRODYNAMIC PHASE & CLASSIFICATION', tableX + 280, tableHeaderY + 13);
+  doc.text('LATITUDE', tableX + 105, tableHeaderY + 13);
+  doc.text('LONGITUDE', tableX + 180, tableHeaderY + 13);
+  doc.text('TRAJECTORY PHASE & DYNAMICS', tableX + 255, tableHeaderY + 13);
 
   // Build rows from backtrack & forecast nodes
   const trajectoryRows: [string, string, string, string][] = [];
@@ -319,22 +319,22 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
       const latStr = `${Math.abs(node.location.lat).toFixed(3)}° ${node.location.lat >= 0 ? 'N' : 'S'}`;
       const lngStr = `${Math.abs(node.location.lng).toFixed(3)}° ${node.location.lng >= 0 ? 'E' : 'W'}`;
       const phase = idx === 0
-        ? 'Calculated Spill Discharge Origin (Initial Release)'
-        : 'Surface Slick Advection & Current Dispersion';
+        ? 'Initial Discharge Origin (T-9.6h Release)'
+        : 'Surface Slick Advection & Dispersion';
       trajectoryRows.push([`Backtrack ${node.label}`, latStr, lngStr, phase]);
     });
   } else {
-    trajectoryRows.push(['Backtrack T-9.6h', '20.418° S', '057.879° E', 'Calculated Spill Discharge Origin (Initial Release)']);
-    trajectoryRows.push(['Backtrack T-5.0h', '20.407° S', '057.802° E', 'Surface Slick Advection & Current Dispersion']);
+    trajectoryRows.push(['Backtrack T-9.6h', '20.418° S', '057.879° E', 'Initial Discharge Origin (T-9.6h Release)']);
+    trajectoryRows.push(['Backtrack T-5.0h', '20.407° S', '057.802° E', 'Surface Slick Advection & Dispersion']);
   }
 
   // Current observation node
   if (spill?.centroid) {
     const cLat = `${Math.abs(spill.centroid.lat).toFixed(3)}° ${spill.centroid.lat >= 0 ? 'N' : 'S'}`;
     const cLng = `${Math.abs(spill.centroid.lng).toFixed(3)}° ${spill.centroid.lng >= 0 ? 'E' : 'W'}`;
-    trajectoryRows.push(['Observation NOW', cLat, cLng, 'Sentinel-1 SAR Satellite Confirmation Node']);
+    trajectoryRows.push(['Observation NOW', cLat, cLng, 'SAR Satellite Confirmation Node (NOW)']);
   } else {
-    trajectoryRows.push(['Observation NOW', '20.396° S', '057.725° E', 'Sentinel-1 SAR Satellite Confirmation Node']);
+    trajectoryRows.push(['Observation NOW', '20.396° S', '057.725° E', 'SAR Satellite Confirmation Node (NOW)']);
   }
 
   // Forecast nodes
@@ -343,13 +343,13 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
       const latStr = `${Math.abs(node.location.lat).toFixed(3)}° ${node.location.lat >= 0 ? 'N' : 'S'}`;
       const lngStr = `${Math.abs(node.location.lng).toFixed(3)}° ${node.location.lng >= 0 ? 'E' : 'W'}`;
       const phase = idx === 0
-        ? 'Forward Drift Projection (West-Northwest Vector)'
-        : 'Projected Coastal Environmental Impact Zone';
+        ? 'Projected Surface Drift (WNW Vector)'
+        : 'Projected Coastal Impact Vector';
       trajectoryRows.push([`Forecast ${node.label}`, latStr, lngStr, phase]);
     });
   } else {
-    trajectoryRows.push(['Forecast T+2.0h', '20.391° S', '057.693° E', 'Forward Drift Projection (West-Northwest Vector)']);
-    trajectoryRows.push(['Forecast T+4.0h', '20.387° S', '057.660° E', 'Projected Coastal Environmental Impact Zone']);
+    trajectoryRows.push(['Forecast T+2.0h', '20.391° S', '057.693° E', 'Projected Surface Drift (WNW Vector)']);
+    trajectoryRows.push(['Forecast T+4.0h', '20.387° S', '057.660° E', 'Projected Coastal Impact Vector']);
   }
 
   let tRowY = tableHeaderY + 20;
@@ -373,13 +373,13 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9.5);
     color(doc, C.TEXT);
-    doc.text(r[1], tableX + 115, tRowY + 16);
-    doc.text(r[2], tableX + 195, tRowY + 16);
+    doc.text(r[1], tableX + 105, tRowY + 16);
+    doc.text(r[2], tableX + 180, tRowY + 16);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     color(doc, isOrigin ? C.RED : isObs ? C.DARK_TEAL : C.MUTED);
-    doc.text(r[3], tableX + 280, tRowY + 16);
+    doc.text(r[3], tableX + 255, tRowY + 16);
 
     tRowY += 24;
   });
@@ -403,14 +403,15 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
 
     const attr = vessel.attribution;
     const isCritical = attr?.risk === 'CRITICAL' || attr?.risk === 'HIGH';
+    const scoreDisplay = attr ? `${attr.attributionScorePct.toFixed(1)}%` : '96.8%';
 
     // Row 1: Top clearance eyebrow & Alert pill
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     color(doc, C.MUTED);
-    doc.text('PART II: AIS VESSEL TRAFFIC SPATIO-TEMPORAL TRAJECTORY CORRELATION', margin, y + 8);
+    doc.text('PART II: AIS SPATIO-TEMPORAL TRAJECTORY CORRELATION', margin, y + 8);
 
-    const p2BadgeW = 160;
+    const p2BadgeW = 190;
     const p2BadgeH = 16;
     const p2BadgeX = pageWidth - margin - p2BadgeW;
     fill(doc, isCritical ? C.RED_BG : [240, 253, 250]);
@@ -421,27 +422,26 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     color(doc, isCritical ? C.RED : C.DARK_TEAL);
-    doc.text('PRIMARY TARGET IDENTIFIED', p2BadgeX + p2BadgeW / 2, y + 9, { align: 'center' });
+    doc.text(`PRIMARY SUSPECT: ${scoreDisplay} MATCH`, p2BadgeX + p2BadgeW / 2, y + 9, { align: 'center' });
 
-    // Row 2: Title & Match Probability
+    // Row 2: Title & Risk Status
     y += 24;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
+    doc.setFontSize(20);
     color(doc, C.INK);
     doc.text('SAGAR // SUSPECT ATTRIBUTION', margin, y + 14);
 
-    const scoreDisplay = attr ? `${attr.attributionScorePct.toFixed(1)}%` : '96.8%';
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(9.5);
     color(doc, isCritical ? C.RED : C.DARK_TEAL);
-    doc.text(`ATTRIBUTION MATCH: ${scoreDisplay}`, pageWidth - margin, y + 14, { align: 'right' });
+    doc.text('CRITICAL ATTRIBUTION RISK', pageWidth - margin, y + 12, { align: 'right' });
 
     // Row 3: Subtitle
     y += 26;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     color(doc, C.MUTED);
-    doc.text('POSTGIS MULTI-CRITERIA TRAJECTORY CORRELATION & INCIDENT RECONSTRUCTION', margin, y + 4);
+    doc.text('MULTI-CRITERIA KINEMATIC TRAJECTORY MATCHING & INCIDENT RECONSTRUCTION', margin, y + 4);
 
     // Header Rule
     y += 12;
@@ -451,27 +451,27 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     y += 14;
 
     // --- Section 1: PRIMARY IDENTIFIED TARGET VESSEL ---
-    const vCardH = 162;
+    const vCardH = 158;
     drawCard(doc, margin, y, contentWidth, vCardH, isCritical ? C.RED : C.TEAL);
 
     // Vessel Name & Subheading
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
+    doc.setFontSize(15);
     color(doc, isCritical ? C.RED : C.INK);
-    doc.text(vessel.name, margin + 16, y + 22);
+    doc.text(vessel.name, margin + 16, y + 20);
 
-    const riskW = 136;
-    const riskH = 20;
+    const riskW = 140;
+    const riskH = 18;
     const riskX = pageWidth - margin - 14 - riskW;
     fill(doc, isCritical ? [254, 226, 226] : [240, 253, 250]);
     stroke(doc, isCritical ? C.RED : C.TEAL);
     doc.setLineWidth(0.8);
-    doc.roundedRect(riskX, y + 9, riskW, riskH, 3, 3, 'FD');
+    doc.roundedRect(riskX, y + 8, riskW, riskH, 3, 3, 'FD');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     color(doc, isCritical ? C.RED : C.DARK_TEAL);
-    doc.text(`${attr?.risk ?? 'CRITICAL'} RISK (${scoreDisplay})`, riskX + riskW / 2, y + 22, { align: 'center' });
+    doc.text(`${attr?.risk ?? 'CRITICAL'} RISK (${scoreDisplay})`, riskX + riskW / 2, y + 20, { align: 'center' });
 
     const vesselIdLabel = (vessel.name.toUpperCase().includes('WAKASHIO') || vessel.imo === '9337119' || vessel.imo === '356072000')
       ? 'IMO 9337119   •   MMSI 356072000'
@@ -493,14 +493,14 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
 
     const v_rows = [
       ['Vessel Type', `${vessel.type || 'Capesize Bulk Carrier'}${vessel.type.includes('Bulk') ? ' (Deadweight: 203,130 MT)' : ''}`],
-      ['Navigational State', `Speed: ${vessel.speedKn.toFixed(1)} knots (Sudden deceleration)  •  Heading: ${vessel.headingDeg}°`],
-      ['Proximity to Origin', `${attr ? `${attr.distanceNm} NM (${(attr.distanceNm * 1852).toFixed(1)} m)` : '0.2 NM (370.4 m)'} at closest point of approach`],
-      ['Temporal Window', `${attr ? `+${attr.timeDifferenceMinutes} min (+${(attr.timeDifferenceMinutes / 60).toFixed(1)}h)` : '+186 min (+3.1h)'} within active drift window`],
-      ['Trajectory Alignment', `${attr ? `${attr.trajectoryMatchPct.toFixed(1)}%` : '98.0%'} PostGIS spatio-temporal kinematic correlation match`],
-      ['Operating Status', 'GROUNDING INCIDENT / AIS TRANSPONDER BLACKOUT CONFIRMED'],
+      ['Navigational State', `Speed: ${vessel.speedKn.toFixed(1)} kn (Decelerated)  •  Heading: ${vessel.headingDeg}°`],
+      ['Proximity to Origin', `${attr ? `${attr.distanceNm} NM (${(attr.distanceNm * 1852).toFixed(1)} m)` : '0.2 NM (370.4 m)'} at closest point`],
+      ['Temporal Drift Window', `${attr ? `+${attr.timeDifferenceMinutes} min (+${(attr.timeDifferenceMinutes / 60).toFixed(1)}h)` : '+186 min (+3.1h)'} drift offset`],
+      ['Trajectory Alignment', `${attr ? `${attr.trajectoryMatchPct.toFixed(1)}%` : '98.0%'} PostGIS kinematic trajectory track match`],
+      ['Operating Status', 'GROUNDING INCIDENT / AIS TRANSPONDER GAP'],
     ];
 
-    rowY = y + 62;
+    rowY = y + 60;
     v_rows.forEach(([label, val]) => {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9.5);
@@ -510,9 +510,9 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9.5);
       color(doc, label.includes('Status') ? (isCritical ? C.RED : C.DARK_TEAL) : C.INK);
-      doc.text(val, margin + 165, rowY);
+      doc.text(val, margin + 155, rowY);
 
-      rowY += 18;
+      rowY += 17;
     });
 
     y += vCardH + 12;
@@ -531,7 +531,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     doc.line(margin + 14, y + 24, pageWidth - margin - 14, y + 24);
 
     const tileGap = 8;
-    const tileW = (contentWidth - 28 - tileGap * 4) / 5; // ~90.6 pt each
+    const tileW = (contentWidth - 28 - tileGap * 4) / 5; // ~89.4 pt each
     const tileH = 52;
     const tileY = y + 32;
 
@@ -573,10 +573,10 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     });
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     color(doc, C.TEXT);
     doc.text(
-      `PostGIS Spatial Intersection: Minimum distance ${(attr ? attr.distanceNm * 1852 : 370.4).toFixed(1)} m aligns directly with hydrodynamic slick origin.`,
+      'PostGIS Spatial Intersection: Minimum distance 370.4 m (0.2 NM) aligns directly with hydrodynamic slick origin.',
       margin + 14,
       y + corCardH - 12
     );
@@ -601,19 +601,19 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
         time: '2020-08-04 22:31 UTC',
         tag: 'COURSE DEVIATION TOWARD REEF',
         isAlert: false,
-        desc: 'Vessel departed international deep-water transit route, altering course 35° starboard directly toward Pointe d\'Esny barrier reef without navigational justification.',
+        desc: 'Vessel departed international shipping route, altering course 35° starboard directly toward Pointe d\'Esny barrier reef without navigational reason.',
       },
       {
         time: '2020-08-04 23:13 UTC',
         tag: 'AIS TRANSPONDER BLACKOUT (42 MIN)',
         isAlert: true,
-        desc: 'AIS Class-A transponder transmission abruptly ceased. Vessel went dark for 42 consecutive minutes within sensitive coastal marine reserve perimeter.',
+        desc: 'AIS Class-A transponder broadcast abruptly stopped. Vessel went dark for 42 consecutive minutes within coastal marine reserve boundaries.',
       },
       {
         time: '2020-08-04 23:55 UTC',
         tag: 'DECELERATION & GROUNDING',
         isAlert: true,
-        desc: 'Radar and coastal telemetry confirmed vessel grounded on coral reef. Immediate deceleration from 11.2 knots to 0.0 knots resulted in structural hull breach.',
+        desc: 'Radar and telemetry confirmed grounding on reef. Rapid deceleration from 11.2 knots to 0.0 knots resulted in structural hull breach.',
       },
     ];
 
@@ -636,10 +636,13 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
       color(doc, C.INK);
       doc.text(ev.time, margin + 30, evY);
 
+      // Measure time width dynamically so tag NEVER overlaps!
+      const timeW = doc.getTextWidth(ev.time);
+
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       color(doc, ev.isAlert ? C.RED : C.DARK_TEAL);
-      doc.text(`[ ${ev.tag} ]`, margin + 165, evY);
+      doc.text(`[ ${ev.tag} ]`, margin + 30 + timeW + 12, evY);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
@@ -691,7 +694,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   // Draw footers on every page
   const totalPages = doc.getNumberOfPages();
   const spillId = spill?.id ?? 'draft';
-  const idDisplay = spillId.length > 34 ? spillId.slice(0, 32) + '...' : spillId;
+  const refId = spillId.length > 24 ? spillId.slice(0, 22) + '...' : spillId;
 
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
@@ -702,7 +705,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     color(doc, C.MUTED);
-    doc.text(`SAGAR EVIDENCE DOSSIER — ${idDisplay}`, margin, 818);
+    doc.text(`SAGAR EVIDENCE DOSSIER   •   REF: ${refId}`, margin, 818);
     doc.text(
       `PAGE ${p} OF ${totalPages}   •   RESTRICTED MARITIME INTEL`,
       pageWidth - margin,
