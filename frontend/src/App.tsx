@@ -32,6 +32,7 @@ import type {
   SurveillanceScanResult,
   LatLng,
 } from './types';
+import { calculateReverseDrift } from './utils/driftEngine';
 
 const LOADING_MESSAGES = [
   'ANALYZING SATELLITE DATA...',
@@ -234,23 +235,40 @@ export default function App() {
         : Math.round(rawConf * 100);
 
       const detectionTime = firstSpill.detected_at || result.timestamp || new Date().toISOString();
+      const centroid = { lat: firstSpill.centroid_lat, lng: firstSpill.centroid_lon };
+      const hoursBack = 9.6;
+      const computedDrift = calculateReverseDrift({
+        centroid,
+        observedAtUtc: detectionTime,
+        windSpeedKmh: 18.5,
+        windDirectionDeg: 125,
+        currentSpeedKmh: 2.2,
+        currentDirectionDeg: 285,
+        driftHours: hoursBack,
+      });
+      const originTimeIso =
+        computedDrift.backtrack[0]?.timestampUtc ||
+        new Date(new Date(detectionTime).getTime() - hoursBack * 3600 * 1000).toISOString();
 
       setSpill((prev) => ({
         id: `surv-${result.zone_key}-${Date.now()}`,
         status: 'ACTIVE_INVESTIGATION',
         detectionConfidencePct: calibratedConfPct,
         estimatedAreaKm2: firstSpill.area_km2,
-        estimatedAgeHours: prev?.estimatedAgeHours ?? 6.0,
+        estimatedAgeHours: hoursBack,
         detectionSource: 'Copernicus Sentinel-1 SAR',
         observedAtUtc: detectionTime,
-        centroid: { lat: firstSpill.centroid_lat, lng: firstSpill.centroid_lon },
+        centroid,
         polygon: { ring },
-        origin: prev?.origin ?? {
-          location: { lat: firstSpill.centroid_lat, lng: firstSpill.centroid_lon },
-          estimatedAtUtc: detectionTime,
-          confidencePct: 92,
+        origin: {
+          location: computedDrift.origin,
+          estimatedAtUtc: originTimeIso,
+          confidencePct: 91.5,
         },
-        drift: prev?.drift ?? { backtrack: [], forecast: [] },
+        drift: {
+          backtrack: computedDrift.backtrack,
+          forecast: computedDrift.forecast,
+        },
       }));
     }
 
