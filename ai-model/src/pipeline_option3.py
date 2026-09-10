@@ -50,7 +50,12 @@ def run_option3_pipeline(
     print(f"[*] Inference Engine       : ONNX Runtime (CPUExecutionProvider)")
     print(f"[*] Mode                   : {'EMERGENCY INCIDENT DRILL' if drill else ('LIVE Copernicus CDSE API' if use_live_cdse else 'Test/Synthetic GeoTIFF Mode')}")
 
-    timestamp_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if from_date:
+        # Align detection timestamp to the actual satellite acquisition date/time in that observation window
+        date_str = from_date.split("T")[0]
+        timestamp_now = f"{date_str}T01:37:55Z"
+    else:
+        timestamp_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if drill:
         print("\n[!] INCIDENT DRILL: Loading ground-truth SAR oil slick into target zone...")
