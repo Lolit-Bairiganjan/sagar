@@ -73,5 +73,20 @@
     "source": "Mauritius Meteorological Services & Copernicus Marine",
     "cached": false,
     "created_at": "2026-09-09T12:17:01.609981Z"
+  },
+  "-20.4_57.72_2020-08-05": {
+    "latitude": -20.3958,
+    "longitude": 57.7247,
+    "date": "2020-08-05",
+    "wind_speed_kmh": 28.5,
+    "wind_direction_deg": 115.0,
+    "current_speed_kmh": 1.85,
+    "current_direction_deg": 270.0,
+    "wave_height_m": 2.1,
+    "sea_temperature_c": 24.2,
+    "conditions": "Strong South-East Trade Winds (28.5 km/h ESE)",
+    "source": "Mauritius Meteorological Services & Copernicus Marine",
+    "cached": false,
+    "created_at": "2026-09-10T10:43:35.990512Z"
   }
 }
