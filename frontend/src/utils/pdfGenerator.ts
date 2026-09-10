@@ -24,49 +24,50 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
 
   // -- Header --------------------------------------------------------------
   doc.setFont('courier', 'bold');
-  doc.setFontSize(18);
+  doc.setFontSize(22);
   setColor(doc, INK);
   doc.text('SAGAR', margin, y);
   doc.setFont('courier', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   setColor(doc, MUTED);
-  doc.text('SAR-BASED AUTOMATED GEOSPATIAL ANALYSIS FOR RECOGNITION OF OIL SPILLS', margin, y + 14);
+  doc.text('SAR-BASED AUTOMATED GEOSPATIAL ANALYSIS FOR RECOGNITION OF OIL SPILLS', margin, y + 16);
 
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(8);
-  doc.text(`GENERATED ${reportTimestamp}`, pageWidth - margin, y - 4, { align: 'right' });
-  doc.text('CLASSIFICATION: OFFICIAL MARITIME SURVEILLANCE', pageWidth - margin, y + 8, { align: 'right' });
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(`GENERATED ${reportTimestamp}`, pageWidth - margin, y - 2, { align: 'right' });
+  doc.text('CLASSIFICATION: OFFICIAL MARITIME SURVEILLANCE', pageWidth - margin, y + 12, { align: 'right' });
 
-  y += 26;
+  y += 28;
   doc.setDrawColor(200, 205, 212);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 26;
+  y += 24;
 
   const sectionTitle = (title: string) => {
     doc.setFont('courier', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(12.5);
     setColor(doc, ACCENT);
     doc.text(title, margin, y);
-    y += 6;
+    y += 5;
     doc.setDrawColor(210, 214, 220);
     doc.line(margin, y, pageWidth - margin, y);
     y += 16;
   };
 
   const kv = (label: string, value: string, indent = 0) => {
-    doc.setFont('courier', 'normal');
-    doc.setFontSize(9);
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(10);
     setColor(doc, MUTED);
     doc.text(label, margin + indent, y);
+    doc.setFont('courier', 'normal');
     setColor(doc, INK);
-    doc.text(value, margin + indent + 150, y);
-    y += 14;
+    doc.text(value, margin + indent + 175, y);
+    y += 15.5;
   };
 
   const ensureSpace = (needed: number) => {
-    if (y + needed > 780) {
+    if (y + needed > 760) {
       doc.addPage();
-      y = 56;
+      y = 52;
     }
   };
 
@@ -183,19 +184,20 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     y += 8;
   }
 
-  // -- Selected vessel evidence ----------------------------------------------
+  // -- Selected vessel evidence (Page 2) ------------------------------------
   if (vessel) {
     const attr = vessel.attribution;
-    ensureSpace(240);
+    doc.addPage();
+    y = 52;
     sectionTitle('SELECTED VESSEL EVIDENCE');
     doc.setFont('courier', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(13);
     setColor(doc, attr?.risk === 'CRITICAL' || attr?.risk === 'HIGH' ? DANGER : INK);
     const vesselIdLabel = (vessel.name.toUpperCase().includes('WAKASHIO') || vessel.imo === '9337119' || vessel.imo === '356072000')
       ? 'IMO 9337119 / MMSI 356072000'
       : vessel.imo.length === 9 ? `MMSI ${vessel.imo}` : `IMO ${vessel.imo}`;
     doc.text(`${vessel.name}  (${vesselIdLabel})`, margin, y);
-    y += 18;
+    y += 20;
     kv('Vessel Type', vessel.type, 12);
 
     let flagDisplay = vessel.flag;
@@ -216,9 +218,12 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
       kv('Time Difference', `+${attr.timeDifferenceMinutes} min`, 12);
       kv('Trajectory Match', `${attr.trajectoryMatchPct}%`, 12);
       kv('Behavior Anomaly', attr.behaviorAnomaly, 12);
-      y += 4;
-      doc.setFont('courier', 'bold'); doc.setFontSize(9); setColor(doc, ACCENT);
-      doc.text('AIS CORRELATION', margin + 12, y); y += 14;
+      y += 6;
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(11);
+      setColor(doc, ACCENT);
+      doc.text('AIS CORRELATION', margin + 12, y);
+      y += 16;
       kv('Spatial', `${attr.correlation.spatialPct}%`, 24);
       kv('Temporal', `${attr.correlation.temporalPct}%`, 24);
       kv('Trajectory', `${attr.correlation.trajectoryPct}%`, 24);
@@ -226,28 +231,38 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
       kv('Overall', `${attr.correlation.overallPct}%`, 24);
     }
     if (vessel.anomalyEvents.length > 0) {
-      ensureSpace(30 + vessel.anomalyEvents.length * 24);
-      doc.setFont('courier', 'bold'); doc.setFontSize(9); setColor(doc, ACCENT);
-      doc.text('BEHAVIOR ANOMALIES & TIMELINE', margin + 12, y); y += 14;
+      ensureSpace(30 + vessel.anomalyEvents.length * 28);
+      y += 4;
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(11);
+      setColor(doc, ACCENT);
+      doc.text('BEHAVIOR ANOMALIES & TIMELINE', margin + 12, y);
+      y += 16;
       vessel.anomalyEvents.forEach((event) => {
-        doc.setFont('courier', 'normal'); doc.setFontSize(8); setColor(doc, MUTED);
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(9.5);
+        setColor(doc, MUTED);
         const time = event.timestampUtc.includes('T')
           ? event.timestampUtc.replace('T', ' ').substring(0, 16) + ' UTC'
           : event.timestampUtc;
-        doc.text(`${time}  —  ${event.label}`, margin + 24, y); y += 11;
+        doc.text(`${time}  —  ${event.label}`, margin + 20, y);
+        y += 13;
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(10);
         setColor(doc, INK);
-        const wrapped = doc.splitTextToSize(event.description, pageWidth - margin * 2 - 24);
-        doc.text(wrapped, margin + 24, y); y += wrapped.length * 11 + 4;
+        const wrapped = doc.splitTextToSize(event.description, pageWidth - margin * 2 - 20);
+        doc.text(wrapped, margin + 20, y);
+        y += wrapped.length * 13 + 6;
       });
     }
-    y += 8;
+    y += 10;
   }
 
   // -- Evidence summary --------------------------------------------------
   ensureSpace(120);
   sectionTitle('EVIDENCE SUMMARY');
   doc.setFont('courier', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   setColor(doc, INK);
   const vesselIdSummary = vessel
     ? ((vessel.name.toUpperCase().includes('WAKASHIO') || vessel.imo === '9337119' || vessel.imo === '356072000')
@@ -262,19 +277,19 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     : 'No vessel was selected for this dossier.';
   const wrappedSummary = doc.splitTextToSize(summary, pageWidth - margin * 2);
   doc.text(wrappedSummary, margin, y);
-  y += wrappedSummary.length * 12 + 20;
+  y += wrappedSummary.length * 13.5 + 20;
 
   // -- Footer on every page --------------------------------------------------
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFont('courier', 'normal');
-    doc.setFontSize(7.5);
+    doc.setFontSize(9);
     setColor(doc, MUTED);
     doc.text(
       `SAGAR EVIDENCE DOSSIER — ${spill?.id ?? 'N/A'} — PAGE ${i} OF ${pageCount} — MARITIME FORENSIC INTELLIGENCE`,
       margin,
-      820,
+      818,
     );
   }
 
