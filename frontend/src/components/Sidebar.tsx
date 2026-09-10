@@ -138,7 +138,7 @@ export default function Sidebar({
                   <span className="text-[9px] font-mono font-bold uppercase text-[#FF6600] flex items-center gap-1">
                     <Ship size={11} /> Top Probable Source:
                   </span>
-                  <span className="text-[8px] font-mono text-[#8E95A5]">RANK #01</span>
+                  <span className="text-[10px] font-mono font-bold text-[#FF6600]">RANK #01</span>
                 </div>
 
                 <button
@@ -192,44 +192,44 @@ export default function Sidebar({
                   {/* 5-Factor PostGIS Multi-Criteria Breakdown */}
                   {maxSuspect.factors && (
                     <div className="flex flex-col gap-1 border-t border-white/10 pt-2 font-mono">
-                      <span className="text-[7.5px] uppercase tracking-wider text-[#8E95A5]">
+                      <span className="text-[9px] uppercase tracking-wider font-semibold text-[#8E95A5]">
                         Multi-Factor Attribution Scores (PostGIS):
                       </span>
-                      <div className="grid grid-cols-5 gap-1 text-center text-[8px]">
-                        <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                          <span className="text-[6.5px] text-[#8E95A5] uppercase">Proxim.</span>
-                          <span className="text-[8px] font-bold text-emerald-400">
+                      <div className="grid grid-cols-5 gap-1 text-center">
+                        <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                          <span className="text-[8px] font-bold text-[#8E95A5] uppercase">Proxim.</span>
+                          <span className="text-[10px] font-bold text-emerald-400">
                             {maxSuspect.factors.proximity_score.toFixed(0)}%
                           </span>
-                          <span className="text-[6px] text-[#6B7280]">w: 35%</span>
+                          <span className="text-[7px] text-[#6B7280]">w: 35%</span>
                         </div>
-                        <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                          <span className="text-[6.5px] text-[#8E95A5] uppercase">Time</span>
-                          <span className="text-[8px] font-bold text-emerald-400">
+                        <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                          <span className="text-[8px] font-bold text-[#8E95A5] uppercase">Time</span>
+                          <span className="text-[10px] font-bold text-emerald-400">
                             {maxSuspect.factors.time_score.toFixed(0)}%
                           </span>
-                          <span className="text-[6px] text-[#6B7280]">w: 35%</span>
+                          <span className="text-[7px] text-[#6B7280]">w: 35%</span>
                         </div>
-                        <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                          <span className="text-[6.5px] text-[#8E95A5] uppercase">AIS Gap</span>
-                          <span className={`text-[8px] font-bold ${maxSuspect.factors.gap_score > 50 ? 'text-red-400' : 'text-gray-400'}`}>
+                        <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                          <span className="text-[8px] font-bold text-[#8E95A5] uppercase">AIS Gap</span>
+                          <span className={`text-[10px] font-bold ${maxSuspect.factors.gap_score > 50 ? 'text-red-400' : 'text-gray-400'}`}>
                             {maxSuspect.factors.gap_score.toFixed(0)}%
                           </span>
-                          <span className="text-[6px] text-[#6B7280]">w: 20%</span>
+                          <span className="text-[7px] text-[#6B7280]">w: 20%</span>
                         </div>
-                        <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                          <span className="text-[6.5px] text-[#8E95A5] uppercase">Type</span>
-                          <span className="text-[8px] font-bold text-amber-400">
+                        <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                          <span className="text-[8px] font-bold text-[#8E95A5] uppercase">Type</span>
+                          <span className="text-[10px] font-bold text-amber-400">
                             {maxSuspect.factors.type_score.toFixed(0)}%
                           </span>
-                          <span className="text-[6px] text-[#6B7280]">w: 15%</span>
+                          <span className="text-[7px] text-[#6B7280]">w: 15%</span>
                         </div>
-                        <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                          <span className="text-[6.5px] text-[#8E95A5] uppercase">Speed</span>
-                          <span className={`text-[8px] font-bold ${maxSuspect.factors.speed_anomaly_score > 50 ? 'text-red-400' : 'text-gray-400'}`}>
+                        <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                          <span className="text-[8px] font-bold text-[#8E95A5] uppercase">Speed</span>
+                          <span className={`text-[10px] font-bold ${maxSuspect.factors.speed_anomaly_score > 50 ? 'text-red-400' : 'text-gray-400'}`}>
                             {maxSuspect.factors.speed_anomaly_score.toFixed(0)}%
                           </span>
-                          <span className="text-[6px] text-[#6B7280]">w: 15%</span>
+                          <span className="text-[7px] text-[#6B7280]">w: 15%</span>
                         </div>
                       </div>
                     </div>
@@ -272,7 +272,7 @@ export default function Sidebar({
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-[11px] font-black text-[#6B7280]">
+                            <span className="text-[12px] font-black text-[#FF6600]">
                               {String(rankNum).padStart(2, '0')}
                             </span>
                             <span className="font-bold text-[11px] truncate text-inherit">
