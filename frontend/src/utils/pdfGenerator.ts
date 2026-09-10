@@ -24,23 +24,30 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
 
   // -- Header --------------------------------------------------------------
   doc.setFont('courier', 'bold');
-  doc.setFontSize(24);
+  doc.setFontSize(22);
   setColor(doc, INK);
   doc.text('SAGAR', margin, y);
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(10.5);
-  setColor(doc, MUTED);
-  doc.text('SAR-BASED AUTOMATED GEOSPATIAL ANALYSIS FOR RECOGNITION OF OIL SPILLS', margin, y + 17);
 
   doc.setFont('courier', 'bold');
-  doc.setFontSize(10);
-  doc.text(`GENERATED ${reportTimestamp}`, pageWidth - margin, y - 2, { align: 'right' });
-  doc.text('CLASSIFICATION: OFFICIAL MARITIME SURVEILLANCE', pageWidth - margin, y + 13, { align: 'right' });
+  doc.setFontSize(9);
+  setColor(doc, ACCENT);
+  doc.text('CLASSIFICATION: OFFICIAL MARITIME SURVEILLANCE', pageWidth - margin, y - 4, { align: 'right' });
 
-  y += 30;
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8);
+  setColor(doc, MUTED);
+  doc.text(`OBSERVATION WINDOW: ${reportTimestamp}`, pageWidth - margin, y + 8, { align: 'right' });
+
+  y += 16;
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(8.5);
+  setColor(doc, MUTED);
+  doc.text('SAR-BASED AUTOMATED GEOSPATIAL ANALYSIS FOR RECOGNITION OF OIL SPILLS', margin, y);
+
+  y += 10;
   doc.setDrawColor(200, 205, 212);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 24;
+  y += 20;
 
   const sectionTitle = (title: string) => {
     doc.setFont('courier', 'bold');
@@ -283,13 +290,22 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFont('courier', 'normal');
-    doc.setFontSize(9.5);
+    doc.setDrawColor(220, 224, 230);
+    doc.line(margin, 804, pageWidth - margin, 804);
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(8);
     setColor(doc, MUTED);
     doc.text(
-      `SAGAR EVIDENCE DOSSIER — ${spill?.id ?? 'N/A'} — PAGE ${i} OF ${pageCount} — MARITIME FORENSIC INTELLIGENCE`,
+      `SAGAR EVIDENCE DOSSIER — ${spill?.id ?? 'N/A'}`,
       margin,
       818,
+    );
+    doc.text(
+      `PAGE ${i} OF ${pageCount}  |  MARITIME FORENSIC INTELLIGENCE`,
+      pageWidth - margin,
+      818,
+      { align: 'right' },
     );
   }
 
