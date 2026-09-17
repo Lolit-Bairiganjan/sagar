@@ -852,11 +852,11 @@ export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggl
               <ul className="space-y-2 font-mono text-xs text-[#A2A8B5]">
                 <li className="flex items-center gap-2">
                   <span className="h-1 w-1 bg-cyan-400" />
-                  <span>Integrated with ECMWF Global Wind & HYCOM Ocean Currents</span>
+                  <span>Open-Meteo Atmospheric & Marine APIs (with 0.3 m/s fallback for coastal current gaps)</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="h-1 w-1 bg-cyan-400" />
-                  <span>12-hour backtrack trajectory with uncertainty boundary cone</span>
+                  <span>3-hour reverse-drift trajectory projection</span>
                 </li>
               </ul>
             </div>
@@ -874,19 +874,30 @@ export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggl
                 Correlates the reverse-drift origin coordinate against historical ship transponder feeds.
                 Assigns an attribution suspicion score (0-100%) factoring:
               </p>
-              <div className="space-y-2 font-mono text-xs text-[#A2A8B5]">
-                <div className="p-2.5 bg-[#14161B] border border-[#2D323E] flex justify-between">
-                  <span>Spatial Proximity (ST_DWithin)</span>
-                  <span className="text-white font-bold">40% Weight</span>
-                </div>
-                <div className="p-2.5 bg-[#14161B] border border-[#2D323E] flex justify-between">
-                  <span>Speed Anomaly (Slowing for dumping)</span>
-                  <span className="text-white font-bold">25% Weight</span>
-                </div>
-                <div className="p-2.5 bg-[#14161B] border border-[#2D323E] flex justify-between">
-                  <span>AIS Transponder Blackout Gaps</span>
+              <div className="space-y-1.5 font-mono text-xs text-[#A2A8B5]">
+                <div className="p-2 bg-[#14161B] border border-[#2D323E] flex justify-between">
+                  <span>Spatial Proximity (Exponential Decay)</span>
                   <span className="text-white font-bold">35% Weight</span>
                 </div>
+                <div className="p-2 bg-[#14161B] border border-[#2D323E] flex justify-between">
+                  <span>Temporal Relevance (Gaussian Alignment)</span>
+                  <span className="text-white font-bold">35% Weight</span>
+                </div>
+                <div className="p-2 bg-[#14161B] border border-[#2D323E] flex justify-between">
+                  <span>AIS Transponder Blackout Gaps (Dark Targets)</span>
+                  <span className="text-white font-bold">20% Weight</span>
+                </div>
+                <div className="p-2 bg-[#14161B] border border-[#2D323E] flex justify-between">
+                  <span>Ship Type Priority (Tankers/Cargo)</span>
+                  <span className="text-white font-bold">15% Weight</span>
+                </div>
+                <div className="p-2 bg-[#14161B] border border-[#2D323E] flex justify-between">
+                  <span>Speed Anomaly (Sudden Maneuvers)</span>
+                  <span className="text-white font-bold">15% Weight</span>
+                </div>
+                <p className="pt-1 text-[10px] text-[#8E95A5] font-sans leading-tight">
+                  Scores normalized across active dimensions (divisor sum: 0.85). Docked vessels receive a 0.3x multiplier.
+                </p>
               </div>
             </div>
           </div>
@@ -953,16 +964,16 @@ export default function LandingPage({ onEnter, themeMode: propThemeMode, onToggl
               },
               {
                 name: 'Animesh Das',
-                role: 'POSTGIS & AIS FORENSICS ENGINEER',
+                role: 'BACKEND LEAD & POSTGIS SPATIAL ARCHITECT',
                 tag: 'BACKEND',
-                focus: 'PostGIS spatio-temporal forensics (ST_DWithin), historical transponder gap & speed drop correlation, and automated maritime legal PDF dossiers.',
+                focus: 'PostGIS spatio-temporal forensics (ST_DWithin, dynamic search buffers), vector reverse-drift modeling & Open-Meteo weather integration, historical transponder gap & speed anomaly correlation, and SQL scoring pipeline design.',
                 github: 'https://github.com/BardOfAnimesh',
               },
               {
-                name: 'Preyoshi Paul',
-                role: 'BACKEND ARCHITECT & DRIFT MODEL LEAD',
+                name: 'Prayashi Paul',
+                role: 'API & CONTAINERIZATION ENGINEER',
                 tag: 'BACKEND',
-                focus: 'High-throughput asynchronous FastAPI microservices, 12h Eulerian reverse-drift leeway hindcasting, and HYCOM/ECMWF environmental vector ingestion.',
+                focus: 'High-throughput asynchronous FastAPI microservices, AIS data pipeline integration, RESTful endpoints, and Docker containerization for production deployment.',
                 github: 'https://github.com/prayashipaul79-svg',
               },
             ].map((member, i) => (

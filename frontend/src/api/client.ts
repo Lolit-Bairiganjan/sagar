@@ -11,6 +11,7 @@ import type {
   SurveillanceScanParams,
   HistoricalSpillSummary,
   HistoricalSpillDetail,
+  HistoricalWeather,
   LatLng,
 } from '../types';
 
@@ -143,141 +144,7 @@ function getMockSystemStatus(): SystemStatus {
 // ---------------------------------------------------------------------------
 
 function getMockVessels(): Vessel[] {
-  return [
-    {
-      id: 'v-blue-horizon',
-      name: 'MT BLUE HORIZON',
-      imo: '9418273',
-      type: 'Chemical / Oil Tanker',
-      flag: 'FICTIONAL',
-      speedKn: 11.8,
-      headingDeg: 274,
-      draftM: 8.4,
-      currentLocation: { lat: 20.436, lng: 65.828 },
-      isSuspect: true,
-      rank: 1,
-      attribution: {
-        attributionScorePct: 94.8,
-        distanceNm: 2.8,
-        timeDifferenceMinutes: 18,
-        trajectoryMatchPct: 96,
-        behaviorAnomaly: 'HIGH',
-        risk: 'CRITICAL',
-        breakdown: {
-          spatialProximity: { score: 28, max: 30 },
-          temporalCorrelation: { score: 25, max: 25 },
-          trajectoryMatch: { score: 22, max: 25 },
-          behaviorAnomaly: { score: 15, max: 20 },
-        },
-        correlation: { spatialPct: 96, temporalPct: 91, trajectoryPct: 94, behaviorPct: 87, overallPct: 94.8 },
-      },
-      anomalyEvents: [
-        { timestampUtc: '2026-08-30T03:42:00Z', label: 'Normal transit', description: 'Steady course, 274°, 12.1 kn.', severity: 'INFO' },
-        { timestampUtc: '2026-08-30T03:51:00Z', label: 'Speed reduction detected', description: 'Speed dropped from 12.1 kn to 6.4 kn over 3 minutes.', severity: 'WARNING' },
-        { timestampUtc: '2026-08-30T04:02:00Z', label: 'Heading deviation', description: 'Course diverged 14° from filed route without AIS status change.', severity: 'WARNING' },
-        { timestampUtc: '2026-08-30T04:08:00Z', label: 'Unusual maneuver', description: 'Two tight heading changes consistent with a hold-position pattern.', severity: 'CRITICAL' },
-        { timestampUtc: '2026-08-30T04:18:00Z', label: 'AIS behavior anomaly', description: 'AIS transmission gap of 94 seconds, atypical for this vessel class.', severity: 'CRITICAL' },
-        { timestampUtc: '2026-08-30T04:20:00Z', label: 'Spill observation', description: 'Sentinel-1 SAR pass detects slick 2.8 NM from vessel position.', severity: 'CRITICAL' },
-        { timestampUtc: '2026-08-30T04:31:00Z', label: 'Course resumed', description: 'Vessel returns to 274° heading at 11.8 kn.', severity: 'INFO' },
-      ],
-    },
-    {
-      id: 'v-ocean-star',
-      name: 'MV OCEAN STAR',
-      imo: '9382716',
-      type: 'Bulk Carrier',
-      flag: 'FICTIONAL',
-      speedKn: 13.2,
-      headingDeg: 261,
-      draftM: 11.1,
-      currentLocation: { lat: 20.512, lng: 65.902 },
-      isSuspect: true,
-      rank: 2,
-      attribution: {
-        attributionScorePct: 82.4,
-        distanceNm: 6.2,
-        timeDifferenceMinutes: 41,
-        trajectoryMatchPct: 87,
-        behaviorAnomaly: 'MEDIUM',
-        risk: 'HIGH',
-        breakdown: {
-          spatialProximity: { score: 22, max: 30 },
-          temporalCorrelation: { score: 20, max: 25 },
-          trajectoryMatch: { score: 20, max: 25 },
-          behaviorAnomaly: { score: 12, max: 20 },
-        },
-        correlation: { spatialPct: 78, temporalPct: 80, trajectoryPct: 87, behaviorPct: 60, overallPct: 82.4 },
-      },
-      anomalyEvents: [
-        { timestampUtc: '2026-08-30T03:20:00Z', label: 'Normal transit', description: 'Steady course, 261°, 13.4 kn.', severity: 'INFO' },
-        { timestampUtc: '2026-08-30T04:01:00Z', label: 'Minor speed variance', description: 'Brief slowdown to 9.8 kn, resumed within 2 minutes.', severity: 'WARNING' },
-        { timestampUtc: '2026-08-30T04:44:00Z', label: 'Course resumed', description: 'Vessel maintains 261° heading, no further anomalies.', severity: 'INFO' },
-      ],
-    },
-    {
-      id: 'v-eastern-glory',
-      name: 'MV EASTERN GLORY',
-      imo: '9274618',
-      type: 'Container Ship',
-      flag: 'FICTIONAL',
-      speedKn: 16.7,
-      headingDeg: 218,
-      draftM: 9.7,
-      currentLocation: { lat: 20.601, lng: 65.688 },
-      isSuspect: true,
-      rank: 3,
-      attribution: {
-        attributionScorePct: 64.1,
-        distanceNm: 11.7,
-        timeDifferenceMinutes: 74,
-        trajectoryMatchPct: 69,
-        behaviorAnomaly: 'LOW',
-        risk: 'MEDIUM',
-        breakdown: {
-          spatialProximity: { score: 14, max: 30 },
-          temporalCorrelation: { score: 16, max: 25 },
-          trajectoryMatch: { score: 17, max: 25 },
-          behaviorAnomaly: { score: 6, max: 20 },
-        },
-        correlation: { spatialPct: 52, temporalPct: 61, trajectoryPct: 69, behaviorPct: 30, overallPct: 64.1 },
-      },
-      anomalyEvents: [
-        { timestampUtc: '2026-08-30T02:55:00Z', label: 'Normal transit', description: 'Steady course, 218°, 16.9 kn.', severity: 'INFO' },
-        { timestampUtc: '2026-08-30T04:20:00Z', label: 'No anomaly at observation time', description: 'No deviation recorded around spill detection window.', severity: 'INFO' },
-      ],
-    },
-    {
-      id: 'v-sea-falcon',
-      name: 'MV SEA FALCON',
-      imo: '9563721',
-      type: 'General Cargo',
-      flag: 'FICTIONAL',
-      speedKn: 10.4,
-      headingDeg: 96,
-      draftM: 6.9,
-      currentLocation: { lat: 20.29, lng: 66.11 },
-      isSuspect: true,
-      rank: 4,
-      attribution: {
-        attributionScorePct: 48.6,
-        distanceNm: 18.3,
-        timeDifferenceMinutes: 96,
-        trajectoryMatchPct: 54,
-        behaviorAnomaly: 'LOW',
-        risk: 'LOW',
-        breakdown: {
-          spatialProximity: { score: 10, max: 30 },
-          temporalCorrelation: { score: 12, max: 25 },
-          trajectoryMatch: { score: 14, max: 25 },
-          behaviorAnomaly: { score: 5, max: 20 },
-        },
-        correlation: { spatialPct: 43, temporalPct: 48, trajectoryPct: 54, behaviorPct: 25, overallPct: 48.6 },
-      },
-      anomalyEvents: [
-        { timestampUtc: '2026-08-30T02:35:00Z', label: 'Course adjustment', description: 'Minor course change during normal cargo transit.', severity: 'INFO' },
-      ],
-    },
-  ];
+  return [];
 }
 
 function trackFromCurrent(vessel: Vessel, seedOffsets: LatLng[]): VesselTrack {
@@ -359,7 +226,10 @@ export async function getVesselTrack(vesselId: string): Promise<VesselTrack> {
     }
   }
   const vessels = getMockVessels();
-  const vessel = vessels.find((v) => v.id === vesselId) ?? vessels[0];
+  const vessel = vessels.find((v) => v.id === vesselId);
+  if (!vessel) {
+    return withLatency({ vesselId, points: [] }, 100);
+  }
   const offsets = MOCK_TRACK_OFFSETS[vesselId] ?? MOCK_TRACK_OFFSETS['v-blue-horizon'];
   return withLatency(trackFromCurrent(vessel, offsets), 300);
 }
@@ -456,8 +326,51 @@ export async function getHistoricalSpills(
 
 export async function getHistoricalSpillDetail(
   spillId: number,
+  originLat?: number,
+  originLon?: number,
 ): Promise<HistoricalSpillDetail> {
-  const { data } = await apiClient.get<HistoricalSpillDetail>(`/spills/${spillId}`);
+  const params: Record<string, any> = {};
+  if (originLat !== undefined && originLon !== undefined) {
+    params.origin_lat = originLat;
+    params.origin_lon = originLon;
+  }
+  const { data } = await apiClient.get<HistoricalSpillDetail>(`/spills/${spillId}`, { params });
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Historical Weather & Marine Oceanographic API
+// ---------------------------------------------------------------------------
+
+export async function getHistoricalWeather(
+  lat: number,
+  lon: number,
+  date?: string,
+): Promise<HistoricalWeather> {
+  try {
+    const { data } = await apiClient.get<HistoricalWeather>('/weather/historical', {
+      params: { lat, lon, date },
+      timeout: 10000,
+    });
+    return data;
+  } catch (err) {
+    console.warn('Weather API failed, using fallback oceanographic model:', err);
+    // Graceful fallback to realistic marine conditions
+    return {
+      latitude: lat,
+      longitude: lon,
+      date: date || new Date().toISOString().slice(0, 10),
+      wind_speed_kmh: 22.0,
+      wind_direction_deg: 120.0,
+      current_speed_kmh: 1.2,
+      current_direction_deg: 260.0,
+      wave_height_m: 1.6,
+      sea_temperature_c: 26.0,
+      conditions: 'Moderate Maritime Breeze',
+      source: 'client_fallback',
+      cached: false,
+    };
+  }
+}
+
 

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Polygon, CircleMarker, Polyline, Tooltip, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import { formatIndianDateTime, formatIndianTime } from '../utils/time';
@@ -68,9 +69,49 @@ export default function SpillLayer({
   showForecast,
   showSatelliteFootprint,
 }: SpillLayerProps) {
-  const ring: [number, number][] = spill.polygon.ring.map((p) => [p.lat, p.lng]);
-  const backtrackLine: [number, number][] = spill.drift.backtrack.map((n) => [n.location.lat, n.location.lng]);
-  const forecastLine: [number, number][] = spill.drift.forecast.map((n) => [n.location.lat, n.location.lng]);
+  const ring: [number, number][] = (spill.polygon?.ring || []).map((p) => [p.lat, p.lng]);
+  const backtrackLine: [number, number][] = (spill.drift?.backtrack || []).map((n) => [n.location.lat, n.location.lng]);
+
+  // Forward forecast vector projection: reuses drift vector forward in time (omitting the +180 deg reversal)
+  const forwardNodes = useMemo(() => {
+    if (spill.drift?.forecast && spill.drift.forecast.length > 1) {
+      return spill.drift.forecast;
+    }
+    if (spill.origin?.location && spill.centroid) {
+      const dLat = spill.centroid.lat - spill.origin.location.lat;
+      const dLng = spill.centroid.lng - spill.origin.location.lng;
+      return [
+        { label: 'NOW', location: spill.centroid, timestampUtc: spill.observedAtUtc, isCurrent: true },
+        {
+          label: 'T+2h',
+          location: {
+            lat: Number((spill.centroid.lat + dLat * 0.67).toFixed(4)),
+            lng: Number((spill.centroid.lng + dLng * 0.67).toFixed(4)),
+          },
+          timestampUtc: '',
+        },
+        {
+          label: 'T+4h',
+          location: {
+            lat: Number((spill.centroid.lat + dLat * 1.33).toFixed(4)),
+            lng: Number((spill.centroid.lng + dLng * 1.33).toFixed(4)),
+          },
+          timestampUtc: '',
+        },
+        {
+          label: 'T+6h',
+          location: {
+            lat: Number((spill.centroid.lat + dLat * 2.0).toFixed(4)),
+            lng: Number((spill.centroid.lng + dLng * 2.0).toFixed(4)),
+          },
+          timestampUtc: '',
+        },
+      ];
+    }
+    return [];
+  }, [spill]);
+
+  const forecastLine: [number, number][] = forwardNodes.map((n) => [n.location.lat, n.location.lng]);
   const footprintRing: [number, number][] | null = satellite
     ? satellite.footprint.corners.map((p) => [p.lat, p.lng])
     : null;
@@ -147,28 +188,31 @@ export default function SpillLayer({
         </>
       )}
 
-      <Marker position={[spill.origin.location.lat, spill.origin.location.lng]} icon={originIcon()}>
-        <Tooltip direction="top" permanent className="!bg-transparent !border-0 !shadow-none">
-          <span className="font-mono-tech text-[12px] font-semibold uppercase tracking-widest text-accent-amber">
-            Estimated Origin
-          </span>
-        </Tooltip>
-        <Popup>
-          <div className="font-mono-tech text-[13px] leading-relaxed">
-            <div className="mb-1 font-semibold text-accent-amber">ESTIMATED ORIGIN</div>
-            <Row label="Confidence" value={`${spill.origin.confidencePct}%`} />
-            <Row label="Est. time" value={formatIndianTime(spill.origin.estimatedAtUtc, { hour: '2-digit', minute: '2-digit' })} />
-          </div>
-        </Popup>
-      </Marker>
+      {/* Backtrack drift trajectory and estimated origin (controlled by BACKTRACK toggle) */}
+      {showDrift && spill.origin?.location && (
+        <Marker position={[spill.origin.location.lat, spill.origin.location.lng]} icon={originIcon()}>
+          <Tooltip direction="top" permanent className="!bg-transparent !border-0 !shadow-none">
+            <span className="font-mono-tech text-[12px] font-semibold uppercase tracking-widest text-accent-amber">
+              Estimated Origin
+            </span>
+          </Tooltip>
+          <Popup>
+            <div className="font-mono-tech text-[13px] leading-relaxed">
+              <div className="mb-1 font-semibold text-accent-amber">ESTIMATED ORIGIN</div>
+              <Row label="Confidence" value={`${spill.origin.confidencePct}%`} />
+              <Row label="Est. time" value={formatIndianTime(spill.origin.estimatedAtUtc, { hour: '2-digit', minute: '2-digit' })} />
+            </div>
+          </Popup>
+        </Marker>
+      )}
 
-      {showDrift && (
+      {showDrift && backtrackLine.length > 0 && (
         <>
           <Polyline
             positions={backtrackLine}
             pathOptions={{ color: '#F28C28', weight: 2, opacity: 0.75, dashArray: '2 8' }}
           />
-          {spill.drift.backtrack.map((node) => (
+          {spill.drift?.backtrack?.map((node) => (
             <Marker
               key={node.label + node.timestampUtc}
               position={[node.location.lat, node.location.lng]}
@@ -178,20 +222,30 @@ export default function SpillLayer({
         </>
       )}
 
-      {showForecast && (
+      {/* Forward drift trajectory (controlled by FORECAST toggle) */}
+      {showForecast && forwardNodes.length > 1 && (
         <>
           <Polyline
             positions={forecastLine}
-            pathOptions={{ color: '#F0473D', weight: 2, opacity: 0.7, dashArray: '6 6' }}
+            pathOptions={{ color: '#F0473D', weight: 2, opacity: 0.85, dashArray: '6 6' }}
           />
-          {spill.drift.forecast
+          {forwardNodes
             .filter((n) => !n.isCurrent)
             .map((node) => (
               <Marker
-                key={node.label + node.timestampUtc}
+                key={node.label + (node.timestampUtc || `${node.location.lat}-${node.location.lng}`)}
                 position={[node.location.lat, node.location.lng]}
                 icon={nodeIcon(node.label)}
-              />
+              >
+                <Tooltip direction="top">
+                  <div className="font-mono text-[11px] font-bold text-red-400">
+                    Forward Forecast: {node.label}
+                    <div className="text-[9px] text-white font-normal">
+                      [{node.location.lat.toFixed(4)}, {node.location.lng.toFixed(4)}]
+                    </div>
+                  </div>
+                </Tooltip>
+              </Marker>
             ))}
         </>
       )}

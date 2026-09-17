@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Marker, Polyline, Tooltip, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import type { Vessel, VesselTrack, RiskLevel } from '../types';
@@ -57,8 +58,8 @@ export default function ShipTrackLayer({
         const isDimmed = selectedVesselId !== null && !isSelected;
 
         return (
-          <div key={vessel.id}>
-            {track && (
+          <Fragment key={vessel.id}>
+            {track && track.points && (
               <Polyline
                 positions={track.points.map((p) => [p.location.lat, p.location.lng])}
                 pathOptions={{
@@ -95,7 +96,7 @@ export default function ShipTrackLayer({
                 </div>
               </Popup>
             </Marker>
-          </div>
+          </Fragment>
         );
       })}
     </>

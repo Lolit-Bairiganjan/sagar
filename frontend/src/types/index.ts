@@ -29,6 +29,8 @@ export interface DriftNode {
   isCurrent?: boolean;
 }
 
+export type DriftTrajectoryNode = DriftNode;
+
 export interface DriftPath {
   backtrack: DriftNode[];
   forecast: DriftNode[];
@@ -150,6 +152,22 @@ export interface WeatherData {
   updatedAtUtc: string;
 }
 
+export interface HistoricalWeather {
+  latitude: number;
+  longitude: number;
+  date: string;
+  wind_speed_kmh: number;
+  wind_direction_deg: number;
+  current_speed_kmh: number;
+  current_direction_deg: number;
+  wave_height_m: number;
+  sea_temperature_c: number;
+  conditions: string;
+  source: string;
+  cached: boolean;
+  created_at?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Investigation / system domain
 // ---------------------------------------------------------------------------
@@ -210,6 +228,34 @@ export interface SurveillanceScanResult {
   time_window?: {
     start: string;
     end: string;
+  };
+  suspects?: SuspectCandidate[];
+  max_suspect?: {
+    mmsi: string | number;
+    name: string;
+    final_score: number;
+    probability_pct: number;
+    distance_km: number;
+    hours_before: number;
+    vessel_type?: string;
+    flags?: string[];
+    factors: {
+      proximity_score: number;
+      time_score: number;
+      type_score: number;
+      gap_score: number;
+      speed_anomaly_score: number;
+    };
+  };
+  ground_truth_comparison?: {
+    has_ground_truth: boolean;
+    actual_suspect_name: string;
+    actual_mmsi: string | number;
+    actual_type: string;
+    incident_name: string;
+    is_match: boolean;
+    attribution_confidence_pct: number;
+    comparison_summary: string;
   };
 }
 
