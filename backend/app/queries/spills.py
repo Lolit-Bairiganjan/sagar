@@ -46,6 +46,9 @@ def get_all_spills(limit: int = 50) -> list[dict]:
             r.total_drift_distance_km,
             r.combined_drift_direction_deg,
             r.drift_hours_assumed,
+            r.estimated_discharge_at,
+            r.origin_lat,
+            r.origin_lon,
             (r.computed_at IS NOT NULL) AS has_drift_estimate
         FROM spill_events s
         LEFT JOIN reverse_drift_estimates r ON r.spill_id = s.id
@@ -86,8 +89,13 @@ def get_spill_by_id(spill_id: int) -> dict | None:
             r.combined_drift_direction_deg,
             r.total_drift_distance_km,
             r.drift_hours_assumed,
+            r.estimated_discharge_at,
+            r.origin_lat,
+            r.origin_lon,
             r.computed_at,
             CASE 
+                WHEN r.origin_lat IS NOT NULL AND r.origin_lon IS NOT NULL THEN
+                    ST_AsGeoJSON(ST_SetSRID(ST_Point(r.origin_lon, r.origin_lat), 4326))
                 WHEN r.total_drift_distance_km IS NOT NULL AND r.combined_drift_direction_deg IS NOT NULL THEN
                     ST_AsGeoJSON(
                         ST_Project(

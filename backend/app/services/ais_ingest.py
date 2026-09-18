@@ -15,6 +15,8 @@ import websockets
 import psycopg2
 from dotenv import load_dotenv
 
+from app.config import is_test_mode
+
 # Load environment variables
 _DIR = Path(__file__).resolve().parent
 load_dotenv(_DIR.parent.parent / ".env")
@@ -57,9 +59,11 @@ async def run_ais_ingestion():
         print("[!] Error: AISSTREAM_API_KEY is not set in backend/.env", flush=True)
         return
 
+    live_mode = not is_test_mode()
     print("=================================================================", flush=True)
     print("  SAGAR REAL-TIME AIS VESSEL INGESTION SERVICE", flush=True)
     print("=================================================================", flush=True)
+    print(f"[*] Data mode : {'TEST / synthetic' if not live_mode else 'PRODUCTION / live'}", flush=True)
     print(f"[*] Target Region : {AIS_REGION.upper()} ({len(ACTIVE_BBOX)} bounding zone(s))", flush=True)
     print(f"[*] Database Host : {DATABASE_URL.split('@')[-1] if DATABASE_URL else 'Not set'}", flush=True)
 
@@ -109,25 +113,28 @@ async def run_ais_ingestion():
                             else:
                                 clean_ts = datetime.now(timezone.utc).isoformat()
 
+                            is_test = is_test_mode()
+
                             # 1. Register vessel name
                             cur.execute(
                                 """
-                                INSERT INTO vessels (mmsi, name)
-                                VALUES (%s, %s)
+                                INSERT INTO vessels (mmsi, name, is_test)
+                                VALUES (%s, %s, %s)
                                 ON CONFLICT (mmsi) DO UPDATE
-                                SET name = EXCLUDED.name
-                                WHERE vessels.name IS NULL OR vessels.name = 'Unknown';
+                                SET name = EXCLUDED.name,
+                                    is_test = EXCLUDED.is_test
+                                WHERE vessels.name IS NULL OR vessels.name = 'Unknown' OR vessels.is_test = FALSE;
                                 """,
-                                (mmsi, ship_name),
+                                (mmsi, ship_name, is_test),
                             )
 
                             # 2. Record spatial position in PostGIS (EPSG:4326)
                             cur.execute(
                                 """
-                                INSERT INTO ais_positions (mmsi, geom, ts)
-                                VALUES (%s, ST_SetSRID(ST_Point(%s, %s), 4326), %s);
+                                INSERT INTO ais_positions (mmsi, geom, ts, is_test)
+                                VALUES (%s, ST_SetSRID(ST_Point(%s, %s), 4326), %s, %s);
                                 """,
-                                (mmsi, lon, lat, clean_ts),
+                                (mmsi, lon, lat, clean_ts, is_test),
                             )
 
                             msg_count += 1
@@ -143,12 +150,14 @@ async def run_ais_ingestion():
 
                             cur.execute(
                                 """
-                                INSERT INTO vessels (mmsi, name, ais_type)
-                                VALUES (%s, %s, %s)
+                                INSERT INTO vessels (mmsi, name, ais_type, is_test)
+                                VALUES (%s, %s, %s, %s)
                                 ON CONFLICT (mmsi) DO UPDATE
-                                SET name = EXCLUDED.name, ais_type = EXCLUDED.ais_type;
+                                SET name = EXCLUDED.name,
+                                    ais_type = EXCLUDED.ais_type,
+                                    is_test = EXCLUDED.is_test;
                                 """,
-                                (mmsi, actual_name, ais_type),
+                                (mmsi, actual_name, ais_type, is_test_mode()),
                             )
                             print(f"[AIS Static] Vessel {actual_name} (MMSI: {mmsi}) updated -> AIS Type: {ais_type}", flush=True)
 
