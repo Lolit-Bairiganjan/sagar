@@ -10,6 +10,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL is None:
     raise RuntimeError("DATABASE_URL is not set.")
 
+
+def _as_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def is_test_mode() -> bool:
+    """Returns True when the backend is running in a test/synthetic-data context."""
+    app_env = os.getenv("APP_ENV", "production").strip().lower()
+    if app_env in {"test", "testing", "ci"}:
+        return True
+    return _as_bool(os.getenv("IS_TEST_MODE"), default=False)
+
 SPILL_AREA_BUFFER_TIERS_KM = [(1, 5), (10, 10), (float("inf"), 25)]
 
 MAX_PLAUSIBLE_SPEED_KMH = 100
@@ -31,7 +45,9 @@ PORT_DOCKED_SCORE_MULTIPLIER = 0.3
 
 WIND_DRIFT_FACTOR = 0.03
 FALLBACK_CURRENT_SPEED_MS = 0.3
-DEFAULT_DRIFT_HOURS = 3.0
+# Fallback drift horizon used by the current heuristic; this is not a measured
+# discharge-time estimate and is kept aligned with the spill API contract.
+DEFAULT_DRIFT_HOURS = 6.0
 
 # Weights sum to 0.85, NOT 1.0 -- trajectory_alignment (S13) is flag-only,
 # not scored. The scoring query divides by 0.85 (sum of ACTIVE dimensions),
