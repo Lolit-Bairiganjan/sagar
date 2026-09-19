@@ -8,6 +8,32 @@ from datetime import datetime, timedelta
 from app.db import get_connection
 
 
+class AISCoverageError(RuntimeError):
+    """Raised when a spill has no usable AIS positions in the relevant window."""
+
+
+def evaluate_ais_coverage(candidate_rows: int, distinct_mmsi: int) -> dict:
+    """Return a structured status for the AIS coverage gate used before suspect ranking."""
+    candidate_rows = int(candidate_rows or 0)
+    distinct_mmsi = int(distinct_mmsi or 0)
+    coverage_ok = candidate_rows > 0 and distinct_mmsi > 0
+
+    if coverage_ok:
+        return {
+            "coverage_ok": True,
+            "candidate_rows": candidate_rows,
+            "distinct_mmsi": distinct_mmsi,
+            "message": f"AIS coverage confirmed: {candidate_rows} records / {distinct_mmsi} vessels.",
+        }
+
+    return {
+        "coverage_ok": False,
+        "candidate_rows": candidate_rows,
+        "distinct_mmsi": distinct_mmsi,
+        "message": "No AIS coverage in the incident window. Attribution cannot proceed.",
+    }
+
+
 def resolve_suspect_search_parameters(
     detected_at: datetime | None = None,
     drift_hours_assumed: float | int | str | None = None,
@@ -185,6 +211,27 @@ def get_suspects(
             origin_lat=resolved_origin_lat,
             origin_lon=resolved_origin_lon,
         )
+
+        coverage_query = """
+            SELECT COUNT(*) AS candidate_rows, COUNT(DISTINCT ap.mmsi) AS distinct_mmsi
+            FROM ais_positions ap
+            JOIN spill_events s ON s.id = %(spill_id)s
+            WHERE ap.ts BETWEEN %(t_start)s AND s.detected_at
+              AND COALESCE(ap.is_test, FALSE) = FALSE
+              AND (
+                  ST_DWithin(ap.geom::geography, s.geom::geography, 50000)
+                  OR ST_DWithin(ap.geom::geography, ST_Centroid(s.geom)::geography, 50000)
+              )
+        """
+        cur = conn.cursor()
+        cur.execute(coverage_query, {
+            "spill_id": spill_id,
+            "t_start": search_params["t_start"],
+        })
+        coverage_rows = cur.fetchone()
+        coverage_status = evaluate_ais_coverage(coverage_rows[0], coverage_rows[1])
+        if not coverage_status["coverage_ok"]:
+            raise AISCoverageError(coverage_status["message"])
 
         cur = conn.cursor()
         cur.execute(

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas import SpillInput
 from app.queries.spills import insert_spill, get_all_spills, get_spill_by_id
-from app.queries.suspects import get_suspects
+from app.queries.suspects import AISCoverageError, get_suspects
 from app.services.drift import process_new_spill, estimate_spill_area_km2
 
 router = APIRouter(tags=["spills"])
@@ -43,9 +43,14 @@ def spill_detail(
     if not data:
         raise HTTPException(status_code=404, detail=f"Spill {spill_id} not found")
 
-    # Fetch suspect vessels using passed or estimated origin
+    # Fetch suspect vessels using passed or estimated origin. Missing AIS coverage
+    # must be surfaced as data quality status instead of a silent empty list.
+    suspect_rows = []
+    coverage_error = None
     try:
         suspect_rows = get_suspects(spill_id, origin_lat=origin_lat, origin_lon=origin_lon)
+    except AISCoverageError as exc:
+        coverage_error = str(exc)
     except Exception:
         suspect_rows = []
 
@@ -144,6 +149,8 @@ def spill_detail(
         "spill": spill_obj,
         "ocean": ocean_obj,
         "suspects": suspect_rows,
+        "coverage_status": "insufficient_ais_coverage" if coverage_error else "ok",
+        "coverage_error": coverage_error,
         "raw": data,
     }
 
