@@ -24,7 +24,7 @@ import type {
 // needs to change.
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') !== 'false';
+const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'false') === 'true';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -195,10 +195,14 @@ const MOCK_TRACK_OFFSETS: Record<string, LatLng[]> = {
 export async function getSpillData(): Promise<Spill> {
   if (!USE_MOCK) {
     try {
-      const { data } = await apiClient.get<Spill>('/spill');
-      return data;
+      const list = await apiClient.get<{ spills: Array<{ id: number }> }>('/spills', { params: { limit: 1 } });
+      const firstId = list.data.spills?.[0]?.id;
+      if (firstId !== undefined) {
+        const { data } = await apiClient.get<{ spill: Spill }>(`/spills/${firstId}`);
+        if (data?.spill) return data.spill;
+      }
     } catch {
-      // Backend /spill endpoint not implemented yet, fall back gracefully to simulation
+      // Fall back gracefully to the simulation when the backend has not produced a spill yet.
     }
   }
   return withLatency(getMockSpill());
