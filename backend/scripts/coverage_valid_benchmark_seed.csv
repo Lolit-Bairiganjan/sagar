@@ -1,0 +1,1 @@
+incident_id,incident_name,detected_at,actual_culprit_mmsi,actual_culprit_name,actual_origin_lat,actual_origin_lon,observed_area_km2,candidate_mmsis

@@ -23,9 +23,14 @@ SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+import cv2
+import rasterio
+import requests
+from rasterio.windows import Window
 from cdse_client import CopernicusCDSEClient, create_synthetic_test_geotiff
-from lightweight_tiler import slice_geotiff_into_tiles
+from lightweight_tiler import slice_geotiff_into_tiles, TileItem
 from onnx_detector import OnnxOilSpillDetector
+from vectorization import create_spill_payload
 
 
 def run_option3_pipeline(
@@ -59,10 +64,6 @@ def run_option3_pipeline(
 
     if drill:
         print("\n[!] INCIDENT DRILL: Loading ground-truth SAR oil slick into target zone...")
-        import cv2
-        import rasterio
-        from rasterio.windows import Window
-        from lightweight_tiler import TileItem, slice_geotiff_into_tiles
 
         sample_path = "ai-model/data/images/train/class_1_00004.jpg"
         sample_candidate_paths = [
@@ -103,7 +104,6 @@ def run_option3_pipeline(
         all_detected_spills = detector.predict_tile(tile_item, timestamp_iso=timestamp_now)
         if not all_detected_spills:
             print("      [!] Model missed the synthetic drill anomaly; injecting a demo spill polygon for the alert drill.")
-            from vectorization import create_spill_payload
             cx, cy = 208.0, 208.0
             radius = 65.0
             points = []
@@ -166,7 +166,6 @@ def run_option3_pipeline(
         step2_start = time.time()
         is_empty_scene = False
         try:
-            import rasterio
             with rasterio.open(scene_path) as chk_src:
                 chk_b1 = chk_src.read(1)
                 if np.count_nonzero(np.isfinite(chk_b1)) == 0:
@@ -224,7 +223,6 @@ def run_option3_pipeline(
     if post_to_backend_url and all_detected_spills:
         print(f"\n[*] Broadcasting detections to Backend: {post_to_backend_url}...")
         try:
-            import requests
             resp = requests.post(post_to_backend_url, json=all_detected_spills[0], timeout=5)
             print(f"    Backend response: {resp.status_code}")
         except Exception as e:
@@ -232,7 +230,6 @@ def run_option3_pipeline(
 
     # Save a human-viewable preview image for visual verification
     try:
-        import cv2
         preview_path = "ai-model/outputs/latest_sar_preview.jpg"
         if drill:
             sample_preview = cv2.imread("ai-model/data/images/train/class_1_00004.jpg")
@@ -242,7 +239,6 @@ def run_option3_pipeline(
                 cv2.imwrite(preview_path, sample_preview)
                 print(f"      Visual radar inspection image saved: {preview_path}")
         else:
-            import rasterio
             target_tif = output_geotiff if os.path.exists(output_geotiff) else None
             if target_tif and os.path.exists(target_tif):
                 with rasterio.open(target_tif) as src:
