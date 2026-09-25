@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas import SpillInput
 from app.queries.spills import insert_spill, get_all_spills, get_spill_by_id
-from app.queries.suspects import get_suspects
-from app.services.drift import process_new_spill
+from app.queries.suspects import AISCoverageError, get_suspects
+from app.services.drift import process_new_spill, estimate_spill_area_km2
 
 router = APIRouter(tags=["spills"])
 
@@ -43,9 +43,14 @@ def spill_detail(
     if not data:
         raise HTTPException(status_code=404, detail=f"Spill {spill_id} not found")
 
-    # Fetch suspect vessels using passed or estimated origin
+    # Fetch suspect vessels using passed or estimated origin. Missing AIS coverage
+    # must be surfaced as data quality status instead of a silent empty list.
+    suspect_rows = []
+    coverage_error = None
     try:
         suspect_rows = get_suspects(spill_id, origin_lat=origin_lat, origin_lon=origin_lon)
+    except AISCoverageError as exc:
+        coverage_error = str(exc)
     except Exception:
         suspect_rows = []
 
@@ -66,15 +71,21 @@ def spill_detail(
         origin_pt = data.get("estimated_origin_geojson")
         if origin_pt and origin_pt.get("coordinates"):
             origin_coords = {"lat": float(origin_pt["coordinates"][1]), "lng": float(origin_pt["coordinates"][0])}
+        elif data.get("origin_lat") is not None and data.get("origin_lon") is not None:
+            origin_coords = {"lat": float(data.get("origin_lat")), "lng": float(data.get("origin_lon"))}
         else:
             origin_coords = {"lat": centroid_lat, "lng": centroid_lon}
 
     detected_at_dt = data.get("detected_at")
     if isinstance(detected_at_dt, datetime):
         detected_iso = detected_at_dt.isoformat()
-        hours_drift = float(data.get("drift_hours_assumed") or 6.0)
-        origin_dt = detected_at_dt - timedelta(hours=hours_drift)
-        origin_iso = origin_dt.isoformat()
+        estimated_discharge = data.get("estimated_discharge_at")
+        if isinstance(estimated_discharge, datetime):
+            origin_iso = estimated_discharge.isoformat()
+        else:
+            hours_drift = float(data.get("drift_hours_assumed") or 6.0)
+            origin_dt = detected_at_dt - timedelta(hours=hours_drift)
+            origin_iso = origin_dt.isoformat()
     else:
         detected_iso = str(detected_at_dt or "")
         origin_iso = detected_iso
@@ -138,6 +149,8 @@ def spill_detail(
         "spill": spill_obj,
         "ocean": ocean_obj,
         "suspects": suspect_rows,
+        "coverage_status": "insufficient_ais_coverage" if coverage_error else "ok",
+        "coverage_error": coverage_error,
         "raw": data,
     }
 
@@ -151,11 +164,13 @@ def create_spill(spill_data: SpillInput):
         raise HTTPException(status_code=500, detail="Failed to insert spill") from e
 
     try:
+        spill_area_km2 = estimate_spill_area_km2(spill_data.spill_polygon_geojson)
         process_new_spill(
             spill_id,
             spill_data.centroid_lat,
             spill_data.centroid_lon,
             spill_data.detected_at,
+            spill_area_km2=spill_area_km2,
         )
     except Exception as e:
         raise HTTPException(

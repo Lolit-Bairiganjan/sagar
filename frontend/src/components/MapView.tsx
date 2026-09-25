@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, useMap, useMapEvents, Polygon as RLPolygon, Tooltip as RLTooltip, CircleMarker as RLCircleMarker, Polyline as RLPolyline } from 'react-leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Droplets, Route, Radio, Satellite as SatelliteIcon } from 'lucide-react';
@@ -323,6 +323,13 @@ export default function MapView({
     label: 'Mumbai High Offshore',
   });
 
+  const handleTargetAoiChange = useCallback((bbox: [number, number, number, number], label: string) => {
+    setTargetAoi((current) => {
+      const sameAoi = current && current.bbox.every((value, index) => value === bbox[index]) && current.label === label;
+      return sameAoi ? current : { bbox, label };
+    });
+  }, []);
+
   // Bi-directional bounding box state synchronized with SurveillancePanel
   const [customBbox, setCustomBbox] = useState<[string, string, string, string]>([
     '71.25',
@@ -643,7 +650,7 @@ export default function MapView({
             isDrawingBox={isDrawingBox}
             onToggleDrawBox={() => setIsDrawingBox((b) => !b)}
             onOpenHistory={() => onNavigateSection?.('Spill Analysis')}
-            onTargetAoiChange={(bbox, label) => setTargetAoi({ bbox, label })}
+            onTargetAoiChange={handleTargetAoiChange}
             selectedSpillIdx={selectedSpillIdx}
             onSelectSpillIdx={(idx) => setSelectedSpillIdx(idx)}
             slickWeather={slickWeather}

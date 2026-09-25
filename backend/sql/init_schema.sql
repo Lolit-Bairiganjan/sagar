@@ -13,18 +13,22 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE TABLE IF NOT EXISTS vessels (
     mmsi BIGINT PRIMARY KEY,
     name TEXT,
-    ais_type INTEGER
+    ais_type INTEGER,
+    is_test BOOLEAN NOT NULL DEFAULT FALSE
 );
+CREATE INDEX IF NOT EXISTS idx_vessels_is_test ON vessels (is_test);
 
 CREATE TABLE IF NOT EXISTS ais_positions (
     id SERIAL PRIMARY KEY,
     mmsi BIGINT REFERENCES vessels(mmsi),
     ts TIMESTAMPTZ NOT NULL,
-    geom GEOMETRY(Point, 4326) NOT NULL
+    geom GEOMETRY(Point, 4326) NOT NULL,
+    is_test BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS idx_ais_geom ON ais_positions USING GIST (geom);
 CREATE INDEX IF NOT EXISTS idx_ais_ts ON ais_positions (ts);
 CREATE INDEX IF NOT EXISTS idx_ais_mmsi_ts ON ais_positions (mmsi, ts);
+CREATE INDEX IF NOT EXISTS idx_ais_is_test_ts ON ais_positions (is_test, ts);
 
 CREATE TABLE IF NOT EXISTS spill_events (
     id SERIAL PRIMARY KEY,
@@ -52,6 +56,9 @@ CREATE TABLE IF NOT EXISTS reverse_drift_estimates (
     combined_drift_direction_deg NUMERIC,
     total_drift_distance_km NUMERIC,
     drift_hours_assumed NUMERIC,
+    estimated_discharge_at TIMESTAMPTZ,
+    origin_lat NUMERIC,
+    origin_lon NUMERIC,
     computed_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(spill_id)
 );

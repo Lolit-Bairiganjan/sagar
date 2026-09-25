@@ -3,7 +3,63 @@ suspects.py — Runs the finalized spatio-temporal suspect-scoring query
 for a given spill and returns ranked candidate vessels.
 """
 
+from datetime import datetime, timedelta
+
 from app.db import get_connection
+
+
+class AISCoverageError(RuntimeError):
+    """Raised when a spill has no usable AIS positions in the relevant window."""
+
+
+def evaluate_ais_coverage(candidate_rows: int, distinct_mmsi: int) -> dict:
+    """Return a structured status for the AIS coverage gate used before suspect ranking."""
+    candidate_rows = int(candidate_rows or 0)
+    distinct_mmsi = int(distinct_mmsi or 0)
+    coverage_ok = candidate_rows > 0 and distinct_mmsi > 0
+
+    if coverage_ok:
+        return {
+            "coverage_ok": True,
+            "candidate_rows": candidate_rows,
+            "distinct_mmsi": distinct_mmsi,
+            "message": f"AIS coverage confirmed: {candidate_rows} records / {distinct_mmsi} vessels.",
+        }
+
+    return {
+        "coverage_ok": False,
+        "candidate_rows": candidate_rows,
+        "distinct_mmsi": distinct_mmsi,
+        "message": "No AIS coverage in the incident window. Attribution cannot proceed.",
+    }
+
+
+def resolve_suspect_search_parameters(
+    detected_at: datetime | None = None,
+    drift_hours_assumed: float | int | str | None = None,
+    estimated_discharge_at: datetime | None = None,
+    origin_lat: float | None = None,
+    origin_lon: float | None = None,
+) -> dict:
+    """Resolve the actual backtrack window used for suspect ranking.
+
+    When a spill has a stored discharge estimate, it should drive the candidate
+    search window. If no estimate exists, fall back to the configured drift time.
+    """
+    if estimated_discharge_at is not None:
+        t_start = estimated_discharge_at
+    elif detected_at is not None:
+        hours = float(drift_hours_assumed) if drift_hours_assumed not in (None, "") else 6.0
+        t_start = detected_at - timedelta(hours=hours)
+    else:
+        t_start = None
+
+    return {
+        "t_start": t_start,
+        "origin_lat": origin_lat,
+        "origin_lon": origin_lon,
+    }
+
 
 # Input: one bound parameter, spill_id (integer). Never interpolate this
 # with f-strings/.format()/+ concatenation -- that reopens SQL injection.
@@ -11,25 +67,21 @@ QUERY_TEXT = """
 WITH params AS (
   SELECT s.id AS spill_id, s.geom AS spill_geom, s.detected_at AS t_sat,
     ST_Area(s.geom::geography) / 1000000.0 AS area_km2,
-    (s.detected_at - INTERVAL '6 hours') AS t_start
-  FROM spill_events s
-  WHERE s.id = %(spill_id)s
-),
-drift_adj AS (
-  SELECT p.spill_id,
+    COALESCE(%(t_start)s::timestamptz, s.detected_at - INTERVAL '6 hours') AS t_start,
     CASE
       WHEN %(origin_lat)s IS NOT NULL AND %(origin_lon)s IS NOT NULL THEN
         ST_SetSRID(ST_MakePoint(%(origin_lon)s::float, %(origin_lat)s::float), 4326)
       ELSE
-        ST_Centroid(p.spill_geom)
+        ST_Centroid(s.geom)
     END AS estimated_discharge_point
-  FROM params p
+  FROM spill_events s
+  WHERE s.id = %(spill_id)s
 ),
 buffer_calc AS (
-  SELECT p.*, d.estimated_discharge_point,
+  SELECT p.*,
     CASE WHEN p.area_km2 < 1 THEN 5000 WHEN p.area_km2 <= 10 THEN 10000 ELSE 25000 END AS buffer_meters,
     3.0 AS time_center_hours
-  FROM params p JOIN drift_adj d ON d.spill_id = p.spill_id
+  FROM params p
 ),
 candidates AS (
   SELECT
@@ -48,6 +100,8 @@ candidates AS (
   JOIN vessels v ON v.mmsi = ap.mmsi
   CROSS JOIN buffer_calc b
   WHERE ap.ts BETWEEN b.t_start AND b.t_sat
+    AND COALESCE(ap.is_test, FALSE) = FALSE
+    AND COALESCE(v.is_test, FALSE) = FALSE
     AND (
       ST_DWithin(ap.geom::geography, b.spill_geom::geography, b.buffer_meters)
       OR ST_DWithin(ap.geom::geography, b.estimated_discharge_point::geography, b.buffer_meters)
@@ -122,18 +176,71 @@ def get_suspects(
 ) -> list[dict]:
     """
     Returns ranked suspect vessels for a spill as a list of dicts.
-    If origin_lat and origin_lon are provided (e.g. from frontend drift calculation),
-    attribution is calculated directly against that estimated discharge origin point.
+    Uses the spill's stored estimated discharge time/origin when available,
+    otherwise falls back to the passed-in coordinates or the centroid-based default.
     """
     conn = get_connection()
     try:
         cur = conn.cursor()
         cur.execute(
+            """
+            SELECT s.detected_at,
+                   r.estimated_discharge_at,
+                   r.drift_hours_assumed,
+                   r.origin_lat,
+                   r.origin_lon
+            FROM spill_events s
+            LEFT JOIN reverse_drift_estimates r ON r.spill_id = s.id
+            WHERE s.id = %(spill_id)s
+            """,
+            {"spill_id": spill_id},
+        )
+        row = cur.fetchone()
+        cur.close()
+
+        if row is None:
+            return []
+
+        detected_at, estimated_discharge_at, drift_hours_assumed, stored_origin_lat, stored_origin_lon = row
+        resolved_origin_lat = origin_lat if origin_lat is not None else stored_origin_lat
+        resolved_origin_lon = origin_lon if origin_lon is not None else stored_origin_lon
+        search_params = resolve_suspect_search_parameters(
+            detected_at=detected_at,
+            drift_hours_assumed=drift_hours_assumed,
+            estimated_discharge_at=estimated_discharge_at,
+            origin_lat=resolved_origin_lat,
+            origin_lon=resolved_origin_lon,
+        )
+
+        coverage_query = """
+            SELECT COUNT(*) AS candidate_rows, COUNT(DISTINCT ap.mmsi) AS distinct_mmsi
+            FROM ais_positions ap
+            JOIN spill_events s ON s.id = %(spill_id)s
+            WHERE ap.ts BETWEEN %(t_start)s AND s.detected_at
+              AND COALESCE(ap.is_test, FALSE) = FALSE
+              AND (
+                  ST_DWithin(ap.geom::geography, s.geom::geography, 50000)
+                  OR ST_DWithin(ap.geom::geography, ST_Centroid(s.geom)::geography, 50000)
+              )
+        """
+        cur = conn.cursor()
+        cur.execute(coverage_query, {
+            "spill_id": spill_id,
+            "t_start": search_params["t_start"],
+        })
+        coverage_rows = cur.fetchone()
+        coverage_status = evaluate_ais_coverage(coverage_rows[0], coverage_rows[1])
+        if not coverage_status["coverage_ok"]:
+            raise AISCoverageError(coverage_status["message"])
+
+        cur = conn.cursor()
+        cur.execute(
             QUERY_TEXT,
             {
                 "spill_id": spill_id,
-                "origin_lat": origin_lat,
-                "origin_lon": origin_lon,
+                "t_start": search_params["t_start"],
+                "origin_lat": search_params["origin_lat"],
+                "origin_lon": search_params["origin_lon"],
             },
         )
         columns = [desc[0] for desc in cur.description]
