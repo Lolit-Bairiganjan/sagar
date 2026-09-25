@@ -31,17 +31,31 @@ def estimate_spill_radius_km(area_km2: float | None) -> float:
 
 
 def estimate_drift_horizon_hours(area_km2: float | None, fallback_hours: float = DEFAULT_DRIFT_HOURS) -> float:
-    """Area-aware drift horizon. Larger slicks are more likely to have drifted
-    longer before being detected, while smaller slicks are kept near a short,
-    more conservative window."""
+    """Area-aware drift horizon. The horizon grows smoothly with spill size but
+    stays conservative so small slicks do not get an excessive backtrack window,
+    while larger slicks can justify a longer reverse-drift estimate.
+
+    This keeps the logic anchored in observed spill area rather than forcing a
+    single fixed value for every incident.
+    """
     if area_km2 is None:
         return float(fallback_hours)
+
     if area_km2 <= 1.0:
         return 6.0
+
     if area_km2 <= 10.0:
-        return 12.0
+        t = (area_km2 - 1.0) / 9.0
+        return 6.0 + t * 6.0
+
     if area_km2 <= 50.0:
-        return 18.0
+        t = (area_km2 - 10.0) / 40.0
+        return 12.0 + t * 6.0
+
+    if area_km2 <= 200.0:
+        t = (area_km2 - 50.0) / 150.0
+        return 18.0 + t * 6.0
+
     return 24.0
 
 
