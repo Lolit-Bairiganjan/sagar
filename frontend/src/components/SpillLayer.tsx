@@ -169,9 +169,19 @@ export default function SpillLayer({
                 <div className="mb-1 flex items-center gap-1.5 font-semibold tracking-wide text-accent-orange">
                   <span className="h-1.5 w-1.5 rounded-full bg-accent-orange" /> SPILL DETECTED
                 </div>
-                <Row label="Confidence" value={`${spill.detectionConfidencePct}%`} />
+                <Row
+                  label="Detection score"
+                  value={spill.detectionConfidencePct === null
+                    ? 'Not available'
+                    : `${spill.detectionConfidencePct}%`}
+                />
                 <Row label="Est. Area" value={`${spill.estimatedAreaKm2} km²`} />
-                <Row label="Est. Age" value={`${spill.estimatedAgeHours} hrs`} />
+                <Row
+                  label="Est. Age"
+                  value={spill.estimatedAgeHours === null
+                    ? 'Not available'
+                    : `${spill.estimatedAgeHours} hrs`}
+                />
                 <Row label="Source" value={spill.detectionSource} />
                 <Row label="Observed" value={formatIndianDateTime(spill.observedAtUtc)} />
               </div>
@@ -199,8 +209,18 @@ export default function SpillLayer({
           <Popup>
             <div className="font-mono-tech text-[13px] leading-relaxed">
               <div className="mb-1 font-semibold text-accent-amber">ESTIMATED ORIGIN</div>
-              <Row label="Confidence" value={`${spill.origin.confidencePct}%`} />
-              <Row label="Est. time" value={formatIndianTime(spill.origin.estimatedAtUtc, { hour: '2-digit', minute: '2-digit' })} />
+              <Row
+                label="Confidence"
+                value={spill.origin.confidencePct === null
+                  ? 'Not quantified'
+                  : `${spill.origin.confidencePct}%`}
+              />
+              <Row
+                label="Est. time"
+                value={spill.origin.estimatedAtUtc
+                  ? formatIndianTime(spill.origin.estimatedAtUtc, { hour: '2-digit', minute: '2-digit' })
+                  : 'Not available'}
+              />
             </div>
           </Popup>
         </Marker>

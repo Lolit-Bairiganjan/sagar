@@ -17,9 +17,15 @@ export interface SpillPolygon {
 }
 
 export interface SpillOrigin {
-  location: LatLng;
-  estimatedAtUtc: string;
-  confidencePct: number;
+  location: LatLng | null;
+  estimatedAtUtc: string | null;
+  confidencePct: number | null;
+  uncertainty?: {
+    status: 'not_quantified';
+    probabilityCalibrated: false;
+    positionBoundsKm: null;
+    limitations: string[];
+  };
 }
 
 export interface DriftNode {
@@ -27,6 +33,53 @@ export interface DriftNode {
   location: LatLng;
   timestampUtc: string;
   isCurrent?: boolean;
+}
+
+export interface ReconstructionFrame {
+  label: string;
+  timestampUtc: string;
+  hoursBeforeDetection: number;
+  location: LatLng;
+  isCurrent?: boolean;
+  weather?: {
+    sampledAtUtc: string;
+    windSpeedKmh: number;
+    windDirectionFromDeg: number;
+    currentSpeedKmh: number;
+    currentDirectionToDeg: number;
+    windSource: string;
+    currentSource: string;
+    inputStatus: string;
+  };
+}
+
+export interface DriftReconstruction {
+  id: number;
+  spill_id: number;
+  model_version: string;
+  status: 'complete';
+  detected_at: string;
+  horizon_hours: number;
+  start_at: string;
+  end_at: string;
+  summary: Record<string, unknown>;
+  uncertainty: {
+    coastline_interaction?: {
+      status: 'not_modeled';
+      path_may_cross_land: boolean;
+      positions_are_clipped_to_coastline: boolean;
+    };
+    slick_evolution?: {
+      status: 'not_modeled';
+      fragmentation_or_patchiness: string;
+      emulsification: string;
+      area_by_frame: null;
+    };
+    [key: string]: unknown;
+  };
+  input_provenance: Record<string, unknown>;
+  created_at: string;
+  frames: ReconstructionFrame[];
 }
 
 export type DriftTrajectoryNode = DriftNode;
@@ -41,9 +94,9 @@ export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export interface Spill {
   id: string;
   status: 'ACTIVE_INVESTIGATION' | 'RESOLVED' | 'MONITORING';
-  detectionConfidencePct: number;
+  detectionConfidencePct: number | null;
   estimatedAreaKm2: number;
-  estimatedAgeHours: number;
+  estimatedAgeHours: number | null;
   detectionSource: string;
   observedAtUtc: string;
   centroid: LatLng;
@@ -138,12 +191,12 @@ export interface VesselTrack {
 // ---------------------------------------------------------------------------
 
 export interface OceanographicData {
-  windDirectionDeg: number;
-  windSpeedKn: number;
-  currentDirectionDeg: number;
-  currentSpeedKn: number;
-  seaStateM: number;
-  temperatureC: number;
+  windDirectionDeg: number | null;
+  windSpeedKn: number | null;
+  currentDirectionDeg: number | null;
+  currentSpeedKn: number | null;
+  seaStateM: number | null;
+  temperatureC: number | null;
 }
 
 export interface WeatherData {
@@ -224,6 +277,16 @@ export interface SurveillanceScanResult {
   timestamp: string;
   spills: SurveillanceSpill[];
   persisted_spill_ids: number[];
+  persisted_spill_ids_by_detection?: (number | null)[];
+  ais_status?: 'available' | 'no_candidates' | 'unavailable' | 'spill_not_persisted';
+  ais_error?: string;
+  spill_investigations?: {
+    detection_index: number;
+    spill_id: number | null;
+    suspects: SuspectCandidate[];
+    ais_status: 'available' | 'no_candidates' | 'unavailable' | 'spill_not_persisted';
+    ais_error?: string;
+  }[];
   sensor?: string;
   time_window?: {
     start: string;
@@ -234,9 +297,12 @@ export interface SurveillanceScanResult {
     mmsi: string | number;
     name: string;
     final_score: number;
-    probability_pct: number;
+    ranking_score_pct: number;
     distance_km: number;
     hours_before: number;
+    ais_search_start?: string | null;
+    ais_search_end?: string | null;
+    origin_corridor_radius_km?: number | null;
     vessel_type?: string;
     flags?: string[];
     factors: {
@@ -245,6 +311,8 @@ export interface SurveillanceScanResult {
       type_score: number;
       gap_score: number;
       speed_anomaly_score: number;
+      heading_alignment_score: number | null;
+      heading_evidence_available: boolean;
     };
   };
   ground_truth_comparison?: {
@@ -254,7 +322,7 @@ export interface SurveillanceScanResult {
     actual_type: string;
     incident_name: string;
     is_match: boolean;
-    attribution_confidence_pct: number;
+    ranking_score_pct: number;
     comparison_summary: string;
   };
 }
@@ -294,8 +362,15 @@ export interface SuspectCandidate {
   name: string;
   distance_km: number;
   hours_before_detection: number;
+  hours_from_estimated_origin?: number;
+  ais_search_start?: string;
+  ais_search_end?: string;
+  origin_corridor_radius_km?: number;
   proximity_score: number;
   time_score: number;
+  heading_deg?: number | null;
+  heading_alignment_score?: number | null;
+  heading_evidence_available?: boolean;
   type_score: number;
   has_suspicious_gap: boolean;
   gap_score: number;
@@ -311,5 +386,7 @@ export interface HistoricalSpillDetail {
   spill: Spill;
   ocean: OceanographicData;
   suspects: SuspectCandidate[];
+  coverage_status?: 'available' | 'no_candidates' | 'unavailable' | 'insufficient_ais_coverage';
+  coverage_error?: string | null;
   raw: Record<string, any>;
 }

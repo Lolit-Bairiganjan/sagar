@@ -13,6 +13,7 @@ import type {
   HistoricalSpillDetail,
   HistoricalWeather,
   LatLng,
+  DriftReconstruction,
 } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -342,6 +343,22 @@ export async function getHistoricalSpillDetail(
   return data;
 }
 
+export async function getSpillReconstruction(
+  spillId: number,
+): Promise<DriftReconstruction | null> {
+  try {
+    const { data } = await apiClient.get<DriftReconstruction>(
+      `/spills/${spillId}/reconstruction`,
+    );
+    return data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Historical Weather & Marine Oceanographic API
 // ---------------------------------------------------------------------------
@@ -376,5 +393,4 @@ export async function getHistoricalWeather(
     };
   }
 }
-
 

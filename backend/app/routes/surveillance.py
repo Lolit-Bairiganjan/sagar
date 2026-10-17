@@ -329,36 +329,81 @@ def trigger_scan(req: ScanRequest):
         raise HTTPException(status_code=500, detail=f"Failed to read pipeline output: {e}")
 
     # Persist detected spills to Supabase via existing backend logic
-    persisted_spill_ids = []
-    if summary.get("spills"):
+    detections = summary.get("spills") or []
+    persisted_spill_ids_by_detection = [None] * len(detections)
+    persistence_errors = []
+    spill_investigations = []
+
+    from app.queries.spills import insert_spill
+    from app.schemas import SpillInput
+    from app.services.drift import process_new_spill
+    from app.queries.suspects import get_suspects
+
+    for detection_index, spill_data in enumerate(detections):
+        if not spill_data.get("spill_polygon_geojson"):
+            spill_investigations.append({
+                "detection_index": detection_index,
+                "spill_id": None,
+                "suspects": [],
+                "ais_status": "spill_not_persisted",
+            })
+            continue
+
+        c_lat = float(spill_data.get("centroid_lat") or 0.0)
+        c_lon = float(spill_data.get("centroid_lon") or 0.0)
+        det_at = spill_data.get("detected_at", summary.get("timestamp", ""))
         try:
-            from app.queries.spills import insert_spill
-            from app.schemas import SpillInput
-            from app.services.drift import process_new_spill
+            spill_id = insert_spill(SpillInput(
+                centroid_lat=c_lat,
+                centroid_lon=c_lon,
+                detected_at=det_at,
+                spill_polygon_geojson=spill_data["spill_polygon_geojson"],
+            ))
+            persisted_spill_ids_by_detection[detection_index] = spill_id
+        except Exception as error:
+            persistence_errors.append({
+                "detection_index": detection_index,
+                "error": str(error),
+            })
+            print(f"Notice: Could not persist detection {detection_index}: {error}")
+            spill_investigations.append({
+                "detection_index": detection_index,
+                "spill_id": None,
+                "suspects": [],
+                "ais_status": "spill_not_persisted",
+            })
+            continue
 
-            for spill_data in summary["spills"]:
-                if not spill_data.get("spill_polygon_geojson"):
-                    continue
-                c_lat = float(spill_data.get("centroid_lat") or 0.0)
-                c_lon = float(spill_data.get("centroid_lon") or 0.0)
-                det_at = spill_data.get("detected_at", summary.get("timestamp", ""))
-                spill_input = SpillInput(
-                    centroid_lat=c_lat,
-                    centroid_lon=c_lon,
-                    detected_at=det_at,
-                    spill_polygon_geojson=spill_data["spill_polygon_geojson"],
-                )
-                spill_id = insert_spill(spill_input)
-                persisted_spill_ids.append(spill_id)
+        try:
+            process_new_spill(spill_id, c_lat, c_lon, det_at)
+        except Exception as drift_err:
+            print(f"Notice: Drift computation for spill {spill_id} failed: {drift_err}")
 
-                # Compute reverse-drift trajectory immediately
-                try:
-                    process_new_spill(spill_id, c_lat, c_lon, det_at)
-                except Exception as drift_err:
-                    print(f"Notice: Drift computation for spill {spill_id} failed: {drift_err}")
-        except Exception as e:
-            # Don't fail the scan if DB insert fails - still return detections
-            summary["db_persist_error"] = str(e)
+        try:
+            candidates = get_suspects(spill_id)
+            ais_status = "available" if candidates else "no_candidates"
+            investigation = {
+                "detection_index": detection_index,
+                "spill_id": spill_id,
+                "suspects": candidates,
+                "ais_status": ais_status,
+            }
+        except Exception as error:
+            print(f"Notice: AIS suspect query for spill {spill_id} failed: {error}")
+            investigation = {
+                "detection_index": detection_index,
+                "spill_id": spill_id,
+                "suspects": [],
+                "ais_status": "unavailable",
+                "ais_error": str(error),
+            }
+        spill_investigations.append(investigation)
+
+    persisted_spill_ids = [
+        spill_id for spill_id in persisted_spill_ids_by_detection if spill_id is not None
+    ]
+    if persistence_errors:
+        summary["db_persist_errors"] = persistence_errors
 
     # ─── PostGIS AIS Suspect Attribution & Ground Truth Comparison ───────────
     suspect_candidates = []
@@ -370,7 +415,7 @@ def trigger_scan(req: ScanRequest):
         "actual_type": "Commercial Vessel",
         "incident_name": zone_label,
         "is_match": False,
-        "attribution_confidence_pct": 0.0,
+        "ranking_score_pct": 0.0,
         "comparison_summary": "Standard maritime traffic zone without pre-registered historical incident.",
     }
 
@@ -658,72 +703,12 @@ def trigger_scan(req: ScanRequest):
             bm["lon_bounds"][0] <= c_lon_avg <= bm["lon_bounds"][1]):
             matched_benchmark = bm
             break
+    # AOI-only proximity is not enough to claim an incident benchmark match.
+    matched_benchmark = None
 
-    # If we persisted a spill ID, query PostGIS for ranked vessel suspects
-    if persisted_spill_ids:
-        try:
-            from app.queries.suspects import get_suspects
-            suspect_candidates = get_suspects(persisted_spill_ids[0])
-        except Exception as e:
-            print(f"Notice: PostGIS suspect query failed: {e}")
-            suspect_candidates = []
-
-    # If PostGIS had no stored AIS tracks (e.g. historical zone outside local DB seed),
-    # use verified maritime corridor candidates from the benchmark or realistic sector traffic
-    if not suspect_candidates and matched_benchmark and summary.get("status") == "ANOMALY_DETECTED":
-        suspect_candidates = matched_benchmark.get("candidates", [])
-    elif not suspect_candidates and summary.get("status") == "ANOMALY_DETECTED":
-        # Dynamic sector traffic reconstruction for live/custom surveillance AOI
-        suspect_candidates = [
-            {
-                "mmsi": "413982100",
-                "name": "PACIFIC GLORY (Crude Tanker)",
-                "distance_km": 1.45,
-                "hours_before_detection": 2.3,
-                "proximity_score": 92.0,
-                "time_score": 89.0,
-                "type_score": 95.0,
-                "has_suspicious_gap": True,
-                "gap_score": 80.0,
-                "has_speed_anomaly": True,
-                "speed_anomaly_score": 75.0,
-                "is_legitimately_docked": False,
-                "final_score": 87.4,
-                "flags": ["Crude Oil Tanker", "DARK AIS GAP DETECTED", "SUDDEN SPEED DROP (14.2 -> 3.1 kn)"],
-            },
-            {
-                "mmsi": "538008450",
-                "name": "GLOBAL EXPEDITION",
-                "distance_km": 12.8,
-                "hours_before_detection": 4.1,
-                "proximity_score": 60.0,
-                "time_score": 65.0,
-                "type_score": 70.0,
-                "has_suspicious_gap": False,
-                "gap_score": 0.0,
-                "has_speed_anomaly": False,
-                "speed_anomaly_score": 0.0,
-                "is_legitimately_docked": False,
-                "final_score": 41.5,
-                "flags": ["Bulk Carrier", "CRUISING IN TANKER LANE (12.8 kn)"],
-            },
-            {
-                "mmsi": "370123980",
-                "name": "OCEAN HARVEST 7",
-                "distance_km": 28.6,
-                "hours_before_detection": 5.5,
-                "proximity_score": 30.0,
-                "time_score": 45.0,
-                "type_score": 25.0,
-                "has_suspicious_gap": False,
-                "gap_score": 0.0,
-                "has_speed_anomaly": False,
-                "speed_anomaly_score": 10.0,
-                "is_legitimately_docked": False,
-                "final_score": 18.2,
-                "flags": ["Fishing Vessel", "NORMAL FISHING TRAWL"],
-            },
-        ]
+    # Keep the legacy top-level fields aligned to the first detected spill.
+    if spill_investigations:
+        suspect_candidates = spill_investigations[0]["suspects"]
 
     if suspect_candidates:
         top_cand = suspect_candidates[0]
@@ -731,9 +716,12 @@ def trigger_scan(req: ScanRequest):
             "mmsi": top_cand.get("mmsi"),
             "name": top_cand.get("name") or f"VESSEL-{top_cand.get('mmsi')}",
             "final_score": float(top_cand.get("final_score") or 0.0),
-            "probability_pct": float(top_cand.get("final_score") or 0.0),
+            "ranking_score_pct": float(top_cand.get("final_score") or 0.0),
             "distance_km": float(top_cand.get("distance_km") or 0.0),
             "hours_before": float(top_cand.get("hours_before_detection") or 0.0),
+            "ais_search_start": top_cand.get("ais_search_start"),
+            "ais_search_end": top_cand.get("ais_search_end"),
+            "origin_corridor_radius_km": top_cand.get("origin_corridor_radius_km"),
             "vessel_type": top_cand.get("flags", ["Commercial Vessel"])[0] if top_cand.get("flags") else "Commercial Vessel",
             "flags": top_cand.get("flags", []),
             "factors": {
@@ -742,6 +730,8 @@ def trigger_scan(req: ScanRequest):
                 "type_score": float(top_cand.get("type_score") or 40.0),
                 "gap_score": float(top_cand.get("gap_score") or 0.0),
                 "speed_anomaly_score": float(top_cand.get("speed_anomaly_score") or 0.0),
+                "heading_alignment_score": top_cand.get("heading_alignment_score"),
+                "heading_evidence_available": bool(top_cand.get("heading_evidence_available")),
             },
         }
 
@@ -759,32 +749,36 @@ def trigger_scan(req: ScanRequest):
                 matched_benchmark["name"].lower() in str(max_suspect.get("name", "")).lower()
             )
             ground_truth_comp["is_match"] = is_match
-            ground_truth_comp["attribution_confidence_pct"] = max_suspect.get("probability_pct", 96.8)
+            ground_truth_comp["ranking_score_pct"] = max_suspect["ranking_score_pct"]
             if is_match:
                 ground_truth_comp["comparison_summary"] = (
-                    f"MATCH CONFIRMED: AI PostGIS correlation identifies {max_suspect['name']} (MMSI: {max_suspect['mmsi']}) "
-                    f"with {max_suspect['probability_pct']}% probability, matching the confirmed historical perpetrator. "
+                    f"Benchmark match: the top-ranked AIS candidate is {max_suspect['name']} "
+                    f"(MMSI: {max_suspect['mmsi']}). This comparison is not proof of source. "
                     f"{matched_benchmark['narrative']}"
                 )
             else:
                 ground_truth_comp["comparison_summary"] = (
-                    f"CORRELATION: Top suspect is {max_suspect['name']} (Score: {max_suspect['probability_pct']}%), "
+                    f"Top-ranked AIS candidate is {max_suspect['name']} "
+                    f"(ranking score: {max_suspect['ranking_score_pct']}%), "
                     f"compared against historical benchmark {matched_benchmark['name']} (MMSI: {matched_benchmark['mmsi']})."
                 )
     elif max_suspect:
         ground_truth_comp["has_ground_truth"] = False
         ground_truth_comp["actual_suspect_name"] = "Live Traffic Target"
-        ground_truth_comp["is_match"] = True
-        ground_truth_comp["attribution_confidence_pct"] = max_suspect.get("probability_pct", 85.0)
+        ground_truth_comp["is_match"] = False
+        ground_truth_comp["ranking_score_pct"] = max_suspect["ranking_score_pct"]
         ground_truth_comp["comparison_summary"] = (
-            f"Live PostGIS AIS correlation identified {max_suspect['name']} (MMSI: {max_suspect['mmsi']}) "
-            f"as primary suspect with {max_suspect['probability_pct']}% attribution probability based on spatio-temporal decay."
+            f"Live AIS ranking returned {max_suspect['name']} (MMSI: {max_suspect['mmsi']}) "
+            f"as its top candidate (ranking score: {max_suspect['ranking_score_pct']}%). "
+            "This model-based ranking does not establish the source of the spill."
         )
 
     # Enrich response
     summary["zone"] = zone_label
     summary["zone_key"] = req.zone or "custom"
     summary["persisted_spill_ids"] = persisted_spill_ids
+    summary["persisted_spill_ids_by_detection"] = persisted_spill_ids_by_detection
+    summary["spill_investigations"] = spill_investigations
     summary["sensor"] = req.sensor or "Sentinel-1 SAR"
     summary["time_window"] = {
         "start": from_date or "latest_pass",

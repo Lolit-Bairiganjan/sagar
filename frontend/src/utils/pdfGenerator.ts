@@ -1,6 +1,5 @@
 import jsPDF from 'jspdf';
 import type { Spill, Vessel } from '../types';
-import { calculateReverseDrift } from './driftEngine';
 
 // Executive Color Palette
 const C = {
@@ -70,37 +69,11 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   }
 
   // Synchronize origin & drift trajectory with true spill centroid and observation timestamp
-  let originLat = spill?.origin?.location?.lat ?? (spill?.centroid?.lat ?? -20.4175);
-  let originLng = spill?.origin?.location?.lng ?? (spill?.centroid?.lng ?? 57.8789);
-  let originTime = spill?.origin?.estimatedAtUtc ?? (spill?.observedAtUtc ?? reportTimestamp);
-  let originConfidence = spill?.origin?.confidencePct ?? 91.5;
-  let backtrackNodes = spill?.drift?.backtrack ?? [];
-  let forecastNodes = spill?.drift?.forecast ?? [];
-
-  if (spill?.centroid) {
-    const latDiff = Math.abs(originLat - spill.centroid.lat);
-    const lngDiff = Math.abs(originLng - spill.centroid.lng);
-    const isYearMismatch = Boolean(
-      originTime && spill.observedAtUtc && originTime.slice(0, 4) !== spill.observedAtUtc.slice(0, 4)
-    );
-
-    if (latDiff > 5 || lngDiff > 5 || isYearMismatch || backtrackNodes.length === 0) {
-      const computed = calculateReverseDrift({
-        centroid: spill.centroid,
-        observedAtUtc: spill.observedAtUtc,
-        windSpeedKmh: 18.5,
-        windDirectionDeg: 125,
-        currentSpeedKmh: 2.2,
-        currentDirectionDeg: 285,
-        driftHours: spill.estimatedAgeHours || 9.6,
-      });
-      originLat = computed.origin.lat;
-      originLng = computed.origin.lng;
-      originTime = computed.backtrack[0]?.timestampUtc || spill.observedAtUtc;
-      backtrackNodes = computed.backtrack;
-      forecastNodes = computed.forecast;
-    }
-  }
+  const origin = spill?.origin?.location ?? null;
+  const originTime = spill?.origin?.estimatedAtUtc ?? null;
+  const originConfidence = spill?.origin?.confidencePct ?? null;
+  const backtrackNodes = spill?.drift?.backtrack ?? [];
+  const forecastNodes = spill?.drift?.forecast ?? [];
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PAGE 1: SATELLITE RADAR RECONNAISSANCE & DRIFT HINDCAST
@@ -125,7 +98,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   color(doc, C.DARK_TEAL);
-  doc.text('CLASSIFICATION: OFFICIAL MARITIME INTEL', badgeX + badgeW / 2, y + 9, { align: 'center' });
+  doc.text('MODEL-BASED ESTIMATE • NOT A LEGAL FINDING', badgeX + badgeW / 2, y + 9, { align: 'center' });
 
   // Row 2: Large Title & Observation Window
   y += 24;
@@ -203,20 +176,16 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   doc.setLineWidth(0.6);
   doc.line(margin + 14, y + 24, pageWidth - margin - 14, y + 24);
 
-  const rawConf = spill?.detectionConfidencePct ?? 96;
-  const confVal = rawConf < 1 ? Math.round(rawConf * 100) : rawConf;
-  const displayConf = confVal < 50 ? Math.min(96, Math.max(88, Math.round(88 + confVal * 0.8))) : confVal;
-
   const centroidText = spill?.centroid
     ? `${spill.centroid.lat.toFixed(4)}° ${spill.centroid.lat >= 0 ? 'N' : 'S'}, ${spill.centroid.lng.toFixed(4)}° ${spill.centroid.lng >= 0 ? 'E' : 'W'}`
-    : '-20.3958° S, 057.7247° E';
+    : 'Not available';
 
   const s2_rows = [
-    ['Satellite Platform', 'Sentinel-1 SAR (C-Band, IW Mode, 10m Res)'],
-    ['Detection Source', spill?.detectionSource || 'DeepLabV3+ Neural SAR Segmentation'],
-    ['Detection Confidence', `${displayConf}% (High Confidence Automated Match)`],
-    ['Estimated Slick Area', `${spill?.estimatedAreaKm2 ?? 19.2805} km2 (${((spill?.estimatedAreaKm2 ?? 19.2805) * 100).toFixed(1)} ha surface slick)`],
-    ['Estimated Slick Age', `${spill?.estimatedAgeHours ?? 9.6} hours elapsed since initial discharge`],
+    ['Satellite Platform', spill?.detectionSource || 'Not available'],
+    ['Detection Source', spill?.detectionSource || 'Not available'],
+    ['Detection Score', spill?.detectionConfidencePct == null ? 'Not available (not calibrated)' : `${spill.detectionConfidencePct}% (model score)`],
+    ['Estimated Slick Area', spill ? `${spill.estimatedAreaKm2} km2` : 'Not available'],
+    ['Estimated Slick Age', spill?.estimatedAgeHours == null ? 'Not available' : `${spill.estimatedAgeHours} hours`],
     ['Observed Centroid', centroidText],
   ];
 
@@ -250,16 +219,23 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   doc.setLineWidth(0.6);
   doc.line(margin + 14, y + 24, pageWidth - margin - 14, y + 24);
 
-  const originTimeFormatted = originTime.includes('T')
+  const originTimeFormatted = originTime?.includes('T')
     ? originTime.replace('T', ' ').substring(0, 19) + ' UTC'
-    : originTime;
+    : originTime || 'Not available';
 
-  const originCoordText = `${originLat.toFixed(4)}° ${originLat >= 0 ? 'N' : 'S'}, ${originLng.toFixed(4)}° ${originLng >= 0 ? 'E' : 'W'}`;
+  const originCoordText = origin
+    ? `${origin.lat.toFixed(4)}° ${origin.lat >= 0 ? 'N' : 'S'}, ${origin.lng.toFixed(4)}° ${origin.lng >= 0 ? 'E' : 'W'}`
+    : 'Not available';
 
   const s3_rows = [
-    ['Polygon Delineation', `${spill?.polygon?.ring?.length ?? 527} Vertices (Continuous closed ring)`],
+    ['Polygon Delineation', spill ? `${spill.polygon.ring.length} vertices` : 'Not available'],
     ['Estimated Release Origin', originCoordText],
-    ['Origin Confidence', `${originConfidence}% (Backward Drift Coherence)`],
+    [
+      'Origin Confidence',
+      originConfidence === null
+        ? 'Not quantified (no calibrated position-uncertainty model)'
+        : `${originConfidence}% (Backward Drift Coherence)`,
+    ],
     ['Discharge Est. Time', originTimeFormatted],
   ];
 
@@ -323,9 +299,6 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
         : 'Surface Slick Advection & Dispersion';
       trajectoryRows.push([`Backtrack ${node.label}`, latStr, lngStr, phase]);
     });
-  } else {
-    trajectoryRows.push(['Backtrack T-9.6h', '20.418° S', '057.879° E', 'Initial Discharge Origin (T-9.6h Release)']);
-    trajectoryRows.push(['Backtrack T-5.0h', '20.407° S', '057.802° E', 'Surface Slick Advection & Dispersion']);
   }
 
   // Current observation node
@@ -334,7 +307,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
     const cLng = `${Math.abs(spill.centroid.lng).toFixed(3)}° ${spill.centroid.lng >= 0 ? 'E' : 'W'}`;
     trajectoryRows.push(['Observation NOW', cLat, cLng, 'SAR Satellite Confirmation Node (NOW)']);
   } else {
-    trajectoryRows.push(['Observation NOW', '20.396° S', '057.725° E', 'SAR Satellite Confirmation Node (NOW)']);
+    trajectoryRows.push(['Observation NOW', '—', '—', 'Not available']);
   }
 
   // Forecast nodes
@@ -348,8 +321,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
       trajectoryRows.push([`Forecast ${node.label}`, latStr, lngStr, phase]);
     });
   } else {
-    trajectoryRows.push(['Forecast T+2.0h', '20.391° S', '057.693° E', 'Projected Surface Drift (WNW Vector)']);
-    trajectoryRows.push(['Forecast T+4.0h', '20.387° S', '057.660° E', 'Projected Coastal Impact Vector']);
+    trajectoryRows.push(['Forecast', '—', '—', 'Not available; forecast not modeled']);
   }
 
   let tRowY = tableHeaderY + 20;
@@ -388,7 +360,7 @@ export function generateEvidenceDossier(spill: Spill | null, vessel: Vessel | nu
   doc.setFontSize(8);
   color(doc, C.MUTED);
   doc.text(
-    'Note: Backtrack trajectory models hydrodynamic drift advection incorporating Coriolis deflection and surface wind stress.',
+    'Note: Position uncertainty is not calibrated. Coastline interaction and slick evolution are not modeled.',
     margin + 14,
     y + card4H - 8
   );
