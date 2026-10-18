@@ -59,19 +59,19 @@ export default function OceanDataPanel({ data }: OceanDataPanelProps) {
       <Metric
         icon={Wind}
         label="Wind"
-        value={`${data.windDirectionDeg}°`}
-        sub={`${data.windSpeedKn} kn`}
-        rotation={data.windDirectionDeg}
+        value={data.windDirectionDeg == null ? 'Not available' : `${data.windDirectionDeg}°`}
+        sub={data.windSpeedKn == null ? undefined : `${data.windSpeedKn} kn`}
+        rotation={data.windDirectionDeg ?? undefined}
       />
       <Metric
         icon={Navigation}
         label="Current"
-        value={`${data.currentDirectionDeg}°`}
-        sub={`${data.currentSpeedKn} kn`}
-        rotation={data.currentDirectionDeg}
+        value={data.currentDirectionDeg == null ? 'Not available' : `${data.currentDirectionDeg}°`}
+        sub={data.currentSpeedKn == null ? undefined : `${data.currentSpeedKn} kn`}
+        rotation={data.currentDirectionDeg ?? undefined}
       />
-      <Metric icon={Waves} label="Sea State" value={`${data.seaStateM} m`} />
-      <Metric icon={Thermometer} label="Temperature" value={`${data.temperatureC}°C`} />
+      <Metric icon={Waves} label="Sea State" value={data.seaStateM == null ? 'Not available' : `${data.seaStateM} m`} />
+      <Metric icon={Thermometer} label="Temperature" value={data.temperatureC == null ? 'Not available' : `${data.temperatureC}°C`} />
     </div>
   );
 }

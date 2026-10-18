@@ -44,6 +44,8 @@ export default function Sidebar({
 
   const gt = surveillanceResult?.ground_truth_comparison;
   const maxSuspect = surveillanceResult?.max_suspect;
+  const hasVesselTrack = (mmsi: string | number) =>
+    vessels.some((vessel) => vessel.id === `v-${mmsi}`);
   const runnerUps =
     surveillanceResult?.suspects && surveillanceResult.suspects.length > 1
       ? surveillanceResult.suspects.slice(1)
@@ -82,6 +84,17 @@ export default function Sidebar({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        {surveillanceResult && !hasSurveillanceSuspects && (
+          <div className="border border-amber-500/30 bg-amber-500/10 p-3 font-mono text-[11px] leading-relaxed text-amber-200">
+            {surveillanceResult.total_slicks_detected === 0
+              ? 'No spill was detected, so AIS candidate search was not run.'
+              : surveillanceResult.ais_status === 'unavailable'
+              ? `AIS lookup failed${surveillanceResult.ais_error ? `: ${surveillanceResult.ais_error}` : '.'}`
+              : surveillanceResult.ais_status === 'spill_not_persisted'
+              ? 'AIS candidates were not searched because this detection could not be saved.'
+              : 'No matching AIS candidates were returned from the connected database. This does not confirm that no vessel was present.'}
+          </div>
+        )}
         {/* ─── CASE A: REAL SURVEILLANCE SCAN SUSPECT ATTRIBUTION ─── */}
         {hasSurveillanceSuspects && (
           <>
@@ -104,11 +117,11 @@ export default function Sidebar({
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
-                      ★ Ground Truth Verified
+                      ★ Known-Incident Benchmark
                     </span>
                   </div>
                   <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    MATCH: {gt.attribution_confidence_pct}%
+                    RANK: {gt.ranking_score_pct.toFixed(1)}%
                   </span>
                 </div>
 
@@ -136,21 +149,23 @@ export default function Sidebar({
               >
                 <div className="flex items-center justify-between px-1">
                   <span className="text-[9px] font-mono font-bold uppercase text-[#FF6600] flex items-center gap-1">
-                    <Ship size={11} /> Top Probable Source:
+                    <Ship size={11} /> Top-Ranked AIS Candidate:
                   </span>
                   <span className="text-[10px] font-mono font-bold text-[#FF6600]">RANK #01</span>
                 </div>
 
                 <button
+                  disabled={!hasVesselTrack(maxSuspect.mmsi)}
                   onClick={() => onSelectVessel(`v-${maxSuspect.mmsi}`)}
                   onMouseEnter={() => soundEngine.playBubbleHover()}
-                  className={`w-full border p-3 text-left transition-all cursor-pointer rounded ${
+                  title={hasVesselTrack(maxSuspect.mmsi) ? 'Show AIS track' : 'AIS position/track is not available'}
+                  className={`w-full border p-3 text-left transition-all rounded ${
                     selectedVesselId === `v-${maxSuspect.mmsi}` || selectedVesselId === String(maxSuspect.mmsi)
                       ? 'border-[#FF6600] bg-[#FF6600]/15 shadow-[0_0_15px_rgba(255,102,0,0.2)]'
                       : isLight
                       ? 'bg-white border-black/15 hover:border-[#FF6600]/70 hover:shadow-sm'
                       : 'bg-[#14161B] border-[#FF6600]/40 hover:border-[#FF6600]'
-                  }`}
+                  } ${hasVesselTrack(maxSuspect.mmsi) ? 'cursor-pointer' : 'cursor-not-allowed opacity-90'}`}
                 >
                   <div className="mb-2 flex items-center gap-2">
                     <span className="font-mono text-2xl font-black leading-none text-[#FF6600]">
@@ -164,18 +179,18 @@ export default function Sidebar({
                         MMSI {maxSuspect.mmsi} • {maxSuspect.vessel_type || 'Bulk Carrier / Tanker'}
                       </div>
                     </div>
-                    <span className="shrink-0 border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-red-400 bg-red-500/10 border-red-500/40">
-                      CRITICAL RISK
+                    <span className="shrink-0 border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-[#FF6600] bg-[#FF6600]/10 border-[#FF6600]/40">
+                      TOP CANDIDATE
                     </span>
                   </div>
 
-                  {/* Probability Gauge */}
+                  {/* Heuristic Ranking Score */}
                   <div className="mb-2 flex items-baseline gap-1.5">
                     <span className="font-mono text-2xl font-black tabular-nums text-[#FF6600]">
-                      {maxSuspect.probability_pct.toFixed(1)}%
+                      {maxSuspect.ranking_score_pct.toFixed(1)}%
                     </span>
                     <span className="font-mono text-[11px] text-[#6B7280]">
-                      attribution match probability
+                      heuristic ranking score, not probability
                     </span>
                   </div>
 
@@ -188,27 +203,34 @@ export default function Sidebar({
                       <Clock size={11} className="text-[#FF6600]" /> {maxSuspect.hours_before.toFixed(1)}h before
                     </span>
                   </div>
+                  {maxSuspect.origin_corridor_radius_km != null && (
+                    <div className="mb-2 font-mono text-[9px] text-[#8E95A5]">
+                      Operational search: within ±1h of estimated release (capped at detection), within{' '}
+                      {maxSuspect.origin_corridor_radius_km.toFixed(0)} km of estimated origin.
+                      This is a heuristic corridor, not an uncertainty bound.
+                    </div>
+                  )}
 
-                  {/* 5-Factor PostGIS Multi-Criteria Breakdown */}
+                  {/* PostGIS ranking evidence breakdown */}
                   {maxSuspect.factors && (
                     <div className="flex flex-col gap-1.5 border-t border-white/10 pt-2 font-mono">
                       <span className="text-[10px] uppercase tracking-wider font-bold text-[#8E95A5]">
-                        Multi-Factor Attribution Scores (PostGIS):
+                        AIS Candidate Ranking Evidence:
                       </span>
-                      <div className="grid grid-cols-5 gap-1 text-center">
+                      <div className="grid grid-cols-6 gap-1 text-center">
                         <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
                           <span className="text-[9px] font-bold text-[#8E95A5] uppercase">Proxim.</span>
                           <span className="text-[12px] font-black text-emerald-400">
                             {maxSuspect.factors.proximity_score.toFixed(0)}%
                           </span>
-                          <span className="text-[8px] text-[#6B7280]">w: 35%</span>
+                          <span className="text-[8px] text-[#6B7280]">joint w: 35%</span>
                         </div>
                         <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
                           <span className="text-[9px] font-bold text-[#8E95A5] uppercase">Time</span>
                           <span className="text-[12px] font-black text-emerald-400">
                             {maxSuspect.factors.time_score.toFixed(0)}%
                           </span>
-                          <span className="text-[8px] text-[#6B7280]">w: 35%</span>
+                          <span className="text-[8px] text-[#6B7280]">joint w: 35%</span>
                         </div>
                         <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
                           <span className="text-[9px] font-bold text-[#8E95A5] uppercase">AIS Gap</span>
@@ -230,6 +252,15 @@ export default function Sidebar({
                             {maxSuspect.factors.speed_anomaly_score.toFixed(0)}%
                           </span>
                           <span className="text-[8px] text-[#6B7280]">w: 15%</span>
+                        </div>
+                        <div className={`p-1.5 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
+                          <span className="text-[9px] font-bold text-[#8E95A5] uppercase">Course</span>
+                          <span className="text-[12px] font-black text-emerald-400">
+                            {maxSuspect.factors.heading_evidence_available
+                              ? `${maxSuspect.factors.heading_alignment_score?.toFixed(0)}%`
+                              : 'N/A'}
+                          </span>
+                          <span className="text-[8px] text-[#6B7280]">up to w: 15%</span>
                         </div>
                       </div>
                     </div>
@@ -260,15 +291,17 @@ export default function Sidebar({
                       transition={{ delay: idx * 0.05 }}
                     >
                       <button
+                        disabled={!hasVesselTrack(cand.mmsi)}
                         onClick={() => onSelectVessel(`v-${cand.mmsi}`)}
                         onMouseEnter={() => soundEngine.playBubbleHover()}
-                        className={`w-full border p-2.5 text-left transition-all cursor-pointer rounded ${
+                        title={hasVesselTrack(cand.mmsi) ? 'Show AIS track' : 'AIS position/track is not available'}
+                        className={`w-full border p-2.5 text-left transition-all rounded ${
                           isSelected
                             ? 'border-[#FF6600] bg-[#FF6600]/10 shadow-[0_0_10px_rgba(255,102,0,0.15)]'
                             : isLight
                             ? 'bg-white border-black/10 hover:border-[#FF6600]/50 hover:shadow-sm'
                             : 'bg-[#14161B] border-[#252932] hover:border-[#FF6600]/40'
-                        }`}
+                        } ${hasVesselTrack(cand.mmsi) ? 'cursor-pointer' : 'cursor-not-allowed opacity-90'}`}
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -280,7 +313,7 @@ export default function Sidebar({
                             </span>
                           </div>
                           <span className="font-bold text-amber-400 text-[10px] shrink-0">
-                            {scorePct.toFixed(1)}%
+                            {scorePct.toFixed(1)}% rank
                           </span>
                         </div>
 

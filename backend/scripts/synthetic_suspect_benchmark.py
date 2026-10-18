@@ -61,7 +61,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 6371.0 * c
 
 
-def vessel_score(distance_km: float, hours_before_detection: float, vessel: Vessel, culprit: bool) -> float:
+def vessel_score(distance_km: float, hours_before_detection: float, vessel: Vessel) -> float:
     prox = max(0.0, 100.0 - distance_km * 3.5)
     time_term = max(0.0, 100.0 - abs(hours_before_detection - 3.0) * 10.0)
     type_score = {
@@ -76,9 +76,8 @@ def vessel_score(distance_km: float, hours_before_detection: float, vessel: Vess
     gap_bonus = 20.0 if vessel.suspicious_gap else 0.0
     anomaly_bonus = 20.0 if vessel.speed_anomaly else 0.0
     dock_penalty = 50.0 if vessel.legitimately_docked else 0.0
-    culprit_bonus = 20.0 if culprit else 0.0
 
-    score = (prox * 0.38) + (time_term * 0.22) + (type_score * 0.18) + gap_bonus + anomaly_bonus + culprit_bonus - dock_penalty
+    score = (prox * 0.38) + (time_term * 0.22) + (type_score * 0.18) + gap_bonus + anomaly_bonus - dock_penalty
     return max(0.0, min(100.0, score))
 
 
@@ -142,8 +141,7 @@ def rank_case(case: Case) -> list[str]:
     for vessel in case.vessels:
         distance_km = haversine_km(case.actual_origin_lat, case.actual_origin_lon, vessel.lat, vessel.lon)
         hours_before = 3.0 + (math.sin(abs(vessel.lon - case.actual_origin_lon)) * 2.0)
-        culprit = vessel.mmsi == case.actual_culprit_mmsi
-        score = vessel_score(distance_km, hours_before, vessel, culprit)
+        score = vessel_score(distance_km, hours_before, vessel)
         scores.append((vessel.mmsi, score))
 
     scores.sort(key=lambda x: x[1], reverse=True)

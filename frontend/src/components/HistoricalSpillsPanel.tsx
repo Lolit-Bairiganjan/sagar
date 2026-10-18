@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
 import type { HistoricalSpillSummary, HistoricalSpillDetail } from '../types';
-import { getHistoricalSpills, getHistoricalSpillDetail, getHistoricalWeather } from '../api/client';
-import { calculateReverseDrift } from '../utils/driftEngine';
+import { getHistoricalSpills, getHistoricalSpillDetail } from '../api/client';
 import { formatIndianDateTime } from '../utils/time';
 
 interface HistoricalSpillsPanelProps {
@@ -68,31 +67,7 @@ export default function HistoricalSpillsPanel({
     setInspectingId(spillId);
     setLoadingDetailId(spillId);
     try {
-      const targetSpill = spills.find((s) => s.id === spillId);
-      let originLat: number | undefined;
-      let originLon: number | undefined;
-
-      if (targetSpill && targetSpill.centroid_lat && targetSpill.centroid_lon) {
-        try {
-          const obsDate = targetSpill.detected_at ? targetSpill.detected_at.slice(0, 10) : undefined;
-          const weather = await getHistoricalWeather(targetSpill.centroid_lat, targetSpill.centroid_lon, obsDate);
-          const drift = calculateReverseDrift({
-            centroid: { lat: targetSpill.centroid_lat, lng: targetSpill.centroid_lon },
-            observedAtUtc: targetSpill.detected_at || new Date().toISOString(),
-            windSpeedKmh: weather.wind_speed_kmh,
-            windDirectionDeg: weather.wind_direction_deg,
-            currentSpeedKmh: weather.current_speed_kmh,
-            currentDirectionDeg: weather.current_direction_deg,
-            driftHours: targetSpill.drift_hours_assumed || 6,
-          });
-          originLat = drift.origin.lat;
-          originLon = drift.origin.lng;
-        } catch (err) {
-          console.warn('Frontend drift calculation fallback:', err);
-        }
-      }
-
-      const detail = await getHistoricalSpillDetail(spillId, originLat, originLon);
+      const detail = await getHistoricalSpillDetail(spillId);
       onSelectSpill?.(detail);
     } catch (err: any) {
       setError(err?.message || `Failed to fetch spill #${spillId} details`);
