@@ -182,7 +182,12 @@ def main() -> int:
     parser.add_argument("--csv", required=True, help="Path to the benchmark CSV file")
     parser.add_argument("--hours-threshold", type=float, default=6.0, help="Accepted time error threshold in hours")
     parser.add_argument("--km-threshold", type=float, default=10.0, help="Accepted origin distance error threshold in km")
-    parser.add_argument("--required-pass-rate", type=float, default=0.9, help="Minimum pass rate threshold, e.g. 0.9 for 90%")
+    parser.add_argument(
+        "--required-pass-rate",
+        type=float,
+        default=0.9,
+        help="Minimum pass rate threshold; for example, 0.9 represents ninety percent.",
+    )
     args = parser.parse_args()
 
     try:

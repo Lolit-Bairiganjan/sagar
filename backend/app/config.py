@@ -25,6 +25,8 @@ def is_test_mode() -> bool:
     return _as_bool(os.getenv("IS_TEST_MODE"), default=False)
 
 SPILL_AREA_BUFFER_TIERS_KM = [(1, 5), (10, 10), (float("inf"), 25)]
+AIS_ORIGIN_TIME_BUFFER_HOURS = 1
+AIS_HEADING_MAX_PING_GAP_HOURS = 2
 
 MAX_PLAUSIBLE_SPEED_KMH = 100
 SEGMENT_GAP_HOURS = 2
@@ -49,10 +51,9 @@ FALLBACK_CURRENT_SPEED_MS = 0.3
 # discharge-time estimate and is kept aligned with the spill API contract.
 DEFAULT_DRIFT_HOURS = 6.0
 
-# Weights sum to 0.85, NOT 1.0 -- trajectory_alignment (S13) is flag-only,
-# not scored. The scoring query divides by 0.85 (sum of ACTIVE dimensions),
-# not 1.0 -- do not "fix" this to sum to 1.0, or every score will be
-# silently deflated.
+# Heading-derived trajectory alignment is heuristic evidence and is only
+# included when adjacent AIS positions support it. Scores are ranking scores,
+# not calibrated probabilities.
 SCORING_WEIGHTS = {
     "proximity": 0.35,
     "trajectory_alignment": 0.15,

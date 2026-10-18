@@ -11,6 +11,7 @@ import LandingPage from './components/LandingPage';
 import AmbientBackground from './components/AmbientBackground';
 import SectionTransition from './components/SectionTransition';
 import ConsoleLoadingScreen from './components/ConsoleLoadingScreen';
+import BottomTimeline from './components/BottomTimeline';
 import {
   getSpillData,
   getVessels,
@@ -19,6 +20,8 @@ import {
   getOceanographicData,
   getInvestigation,
   getSystemStatus,
+  getSpillReconstruction,
+  getHistoricalSpillDetail,
 } from './api/client';
 import type {
   Spill,
@@ -30,9 +33,46 @@ import type {
   SystemStatus,
   HistoricalSpillDetail,
   SurveillanceScanResult,
-  LatLng,
+  DriftReconstruction,
+  SuspectCandidate,
 } from './types';
-import { calculateReverseDrift } from './utils/driftEngine';
+
+function toScanMaxSuspect(candidate?: SuspectCandidate): SurveillanceScanResult['max_suspect'] {
+  if (!candidate) return undefined;
+  return {
+    mmsi: candidate.mmsi,
+    name: candidate.name,
+    final_score: candidate.final_score,
+    ranking_score_pct: candidate.final_score,
+    distance_km: candidate.distance_km,
+    hours_before: candidate.hours_before_detection,
+    ais_search_start: candidate.ais_search_start,
+    ais_search_end: candidate.ais_search_end,
+    origin_corridor_radius_km: candidate.origin_corridor_radius_km,
+    vessel_type: candidate.flags?.[0],
+    flags: candidate.flags,
+    factors: {
+      proximity_score: candidate.proximity_score,
+      time_score: candidate.time_score,
+      type_score: candidate.type_score,
+      gap_score: candidate.gap_score,
+      speed_anomaly_score: candidate.speed_anomaly_score,
+      heading_alignment_score: candidate.heading_alignment_score ?? null,
+      heading_evidence_available: candidate.heading_evidence_available ?? false,
+    },
+  };
+}
+
+function persistedSpillForDetection(
+  result: SurveillanceScanResult | null,
+  index: number,
+): number | null {
+  if (!result) return null;
+  if (result.persisted_spill_ids_by_detection) {
+    return result.persisted_spill_ids_by_detection[index] ?? null;
+  }
+  return result.persisted_spill_ids[index] ?? null;
+}
 
 const LOADING_MESSAGES = [
   'ANALYZING SATELLITE DATA...',
@@ -89,6 +129,12 @@ export default function App() {
   const [investigation, setInvestigation] = useState<Investigation | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [surveillanceResult, setSurveillanceResult] = useState<SurveillanceScanResult | null>(null);
+  const [selectedScanSpillIndex, setSelectedScanSpillIndex] = useState(0);
+  const [selectedSpillId, setSelectedSpillId] = useState<number | null>(null);
+  const [reconstruction, setReconstruction] = useState<DriftReconstruction | null>(null);
+  const [reconstructionLoading, setReconstructionLoading] = useState(false);
+  const [reconstructionError, setReconstructionError] = useState<string | null>(null);
+  const [selectedFrameIndex, setSelectedFrameIndex] = useState(0);
 
   const [selectedVesselId, setSelectedVesselId] = useState<string | null>(null);
   const [centerTargetVessel, setCenterTargetVessel] = useState<Vessel | null>(null);
@@ -114,6 +160,8 @@ export default function App() {
         if (cancelled) return;
 
         setSpill(spillData);
+        const spillIdMatch = /^SPILL-(\d+)$/.exec(spillData.id);
+        setSelectedSpillId(spillIdMatch ? Number(spillIdMatch[1]) : null);
         setVessels(vesselData);
         setSatellite(satelliteData);
         setOcean(oceanData);
@@ -140,6 +188,66 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setReconstruction(null);
+    setSelectedFrameIndex(0);
+    setReconstructionError(null);
+
+    if (selectedSpillId === null) {
+      setReconstructionLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setReconstructionLoading(true);
+    getSpillReconstruction(selectedSpillId)
+      .then((result) => {
+        if (cancelled) return;
+        setReconstruction(result);
+        setSelectedFrameIndex(Math.max(0, (result?.frames.length ?? 1) - 1));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : 'Failed to load reconstruction';
+        setReconstructionError(message);
+        console.error(`Unable to load reconstruction for spill ${selectedSpillId}:`, err);
+      })
+      .finally(() => {
+        if (!cancelled) setReconstructionLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSpillId]);
+
+  useEffect(() => {
+    if (selectedSpillId === null) return;
+    let cancelled = false;
+    getHistoricalSpillDetail(selectedSpillId)
+      .then((detail) => {
+        if (cancelled) return;
+        setSpill(detail.spill);
+        setOcean(detail.ocean);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Unable to load spill details';
+          setReconstructionError(`Unable to load spill ${selectedSpillId}: ${message}`);
+          console.error(`Unable to load spill details for spill ${selectedSpillId}:`, err);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSpillId]);
+
+  const handleFrameIndexChange = useCallback((index: number) => {
+    setSelectedFrameIndex(index);
+  }, []);
+
   const selectedVessel = useMemo(
     () => vessels.find((v) => v.id === selectedVesselId) ?? null,
     [vessels, selectedVesselId],
@@ -161,6 +269,33 @@ export default function App() {
 
   const handleSelectHistoricalSpill = useCallback((detail: HistoricalSpillDetail) => {
     setSpill(detail.spill);
+    const aisStatus =
+      detail.coverage_status === 'unavailable' ||
+      detail.coverage_status === 'insufficient_ais_coverage'
+        ? 'unavailable'
+        : detail.suspects.length > 0
+        ? 'available'
+        : 'no_candidates';
+    setSurveillanceResult({
+      status: 'ANOMALY_DETECTED',
+      zone: `Archived spill #${detail.spill_id}`,
+      zone_key: 'historical',
+      aoi_bbox: [],
+      total_slicks_detected: 1,
+      total_area_km2: detail.spill.estimatedAreaKm2,
+      pipeline_latency_seconds: 0,
+      timestamp: detail.spill.observedAtUtc,
+      spills: [],
+      persisted_spill_ids: [detail.spill_id],
+      suspects: detail.suspects,
+      max_suspect: toScanMaxSuspect(detail.suspects[0]),
+      ais_status: aisStatus,
+      ais_error: detail.coverage_error ?? undefined,
+    });
+    setVessels([]);
+    setSelectedVesselId(null);
+    setSelectedSpillId(detail.spill_id);
+    setSelectedFrameIndex(0);
     setOcean(detail.ocean);
     setInvestigation({
       id: `SPILL-${detail.spill_id}`,
@@ -170,237 +305,53 @@ export default function App() {
       openedAtUtc: detail.spill.observedAtUtc,
     });
 
-    if (detail.suspects && detail.suspects.length > 0) {
-      const mappedVessels: Vessel[] = detail.suspects.map((cand, idx) => ({
-        id: `v-${cand.mmsi}`,
-        name: cand.name || `VESSEL ${cand.mmsi}`,
-        imo: String(cand.mmsi),
-        type: cand.flags?.[0] || 'Commercial Vessel',
-        flag: 'TRACKED',
-        speedKn: 12.0,
-        headingDeg: 270,
-        draftM: 8.0,
-        currentLocation: detail.spill.origin?.location ?? detail.spill.centroid,
-        isSuspect: true,
-        rank: idx + 1,
-        attribution: {
-          attributionScorePct: cand.final_score,
-          distanceNm: Number((cand.distance_km * 0.539957).toFixed(1)),
-          timeDifferenceMinutes: Math.round(cand.hours_before_detection * 60),
-          trajectoryMatchPct: Math.round(cand.proximity_score),
-          behaviorAnomaly: cand.has_suspicious_gap ? 'HIGH' : 'LOW',
-          risk: cand.final_score >= 80 ? 'CRITICAL' : cand.final_score >= 50 ? 'HIGH' : 'MEDIUM',
-          breakdown: {
-            spatialProximity: { score: Math.round(cand.proximity_score), max: 100 },
-            temporalCorrelation: { score: Math.round(cand.time_score), max: 100 },
-            trajectoryMatch: { score: Math.round(cand.proximity_score), max: 100 },
-            behaviorAnomaly: { score: cand.has_suspicious_gap ? 90 : 20, max: 100 },
-          },
-          correlation: {
-            spatialPct: Math.round(cand.proximity_score),
-            temporalPct: Math.round(cand.time_score),
-            trajectoryPct: Math.round(cand.proximity_score),
-            behaviorPct: cand.has_suspicious_gap ? 90 : 20,
-            overallPct: Math.round(cand.final_score),
-          },
-        },
-        anomalyEvents: (cand.flags || []).map((flag) => ({
-          timestampUtc: detail.spill.observedAtUtc,
-          label: 'FORENSIC FLAG',
-          description: flag,
-          severity: 'WARNING',
-        })),
-      }));
-      setVessels(mappedVessels);
-      if (mappedVessels.length > 0) {
-        setSelectedVesselId(mappedVessels[0].id);
-      }
-    }
   }, []);
 
   const handleSurveillanceResult = useCallback((result: SurveillanceScanResult | null) => {
-    setSurveillanceResult(result);
-    if (!result) return;
-
-    // If result contains detected spills, update spill state
-    if (result.spills && result.spills.length > 0) {
-      const firstSpill = result.spills[0];
-      const coords = firstSpill.spill_polygon_geojson.coordinates[0];
-      const ring: LatLng[] = coords.map(([lon, lat]) => ({ lat, lng: lon }));
-      
-      // Calibrate raw model detection confidence (if raw sigmoid < 0.5, scale to realistic 88-96% range)
-      const rawConf = firstSpill.confidence ?? 0.92;
-      const calibratedConfPct = rawConf < 0.5
-        ? Math.min(96, Math.max(88, Math.round(78 + rawConf * 180)))
-        : Math.round(rawConf * 100);
-
-      const detectionTime = firstSpill.detected_at || result.timestamp || new Date().toISOString();
-      const centroid = { lat: firstSpill.centroid_lat, lng: firstSpill.centroid_lon };
-      const hoursBack = 9.6;
-      const computedDrift = calculateReverseDrift({
-        centroid,
-        observedAtUtc: detectionTime,
-        windSpeedKmh: 18.5,
-        windDirectionDeg: 125,
-        currentSpeedKmh: 2.2,
-        currentDirectionDeg: 285,
-        driftHours: hoursBack,
-      });
-      const originTimeIso =
-        computedDrift.backtrack[0]?.timestampUtc ||
-        new Date(new Date(detectionTime).getTime() - hoursBack * 3600 * 1000).toISOString();
-
-      setSpill((prev) => ({
-        id: `surv-${result.zone_key}-${Date.now()}`,
-        status: 'ACTIVE_INVESTIGATION',
-        detectionConfidencePct: calibratedConfPct,
-        estimatedAreaKm2: firstSpill.area_km2,
-        estimatedAgeHours: hoursBack,
-        detectionSource: 'Copernicus Sentinel-1 SAR',
-        observedAtUtc: detectionTime,
-        centroid,
-        polygon: { ring },
-        origin: {
-          location: computedDrift.origin,
-          estimatedAtUtc: originTimeIso,
-          confidencePct: 91.5,
-        },
-        drift: {
-          backtrack: computedDrift.backtrack,
-          forecast: computedDrift.forecast,
-        },
-      }));
+    setSelectedScanSpillIndex(0);
+    setSelectedFrameIndex(0);
+    setReconstruction(null);
+    setVessels([]);
+    setSelectedVesselId(null);
+    if (!result) {
+      setSurveillanceResult(null);
+      setSpill(null);
+      setSelectedSpillId(null);
+      return;
     }
-
-    // Map suspects into vessels
-    const allSuspects =
-      result.suspects && result.suspects.length > 0
-        ? result.suspects
-        : result.max_suspect
-        ? [
-            {
-              mmsi: result.max_suspect.mmsi,
-              name: result.max_suspect.name,
-              distance_km: result.max_suspect.distance_km,
-              hours_before_detection: result.max_suspect.hours_before,
-              proximity_score: result.max_suspect.factors?.proximity_score ?? 90,
-              time_score: result.max_suspect.factors?.time_score ?? 85,
-              type_score: result.max_suspect.factors?.type_score ?? 75,
-              has_suspicious_gap: (result.max_suspect.factors?.gap_score ?? 0) > 40,
-              gap_score: result.max_suspect.factors?.gap_score ?? 0,
-              has_speed_anomaly: (result.max_suspect.factors?.speed_anomaly_score ?? 0) > 40,
-              speed_anomaly_score: result.max_suspect.factors?.speed_anomaly_score ?? 0,
-              is_legitimately_docked: false,
-              final_score:
-                result.max_suspect.final_score || result.max_suspect.probability_pct,
-              flags: result.max_suspect.flags || ['Probable Source'],
-            },
-          ]
-        : [];
-
-    if (allSuspects.length > 0) {
-      const centerLat =
-        result.spills?.[0]?.centroid_lat ??
-        (result.aoi_bbox ? (result.aoi_bbox[1] + result.aoi_bbox[3]) / 2 : 0);
-      const centerLon =
-        result.spills?.[0]?.centroid_lon ??
-        (result.aoi_bbox ? (result.aoi_bbox[0] + result.aoi_bbox[2]) / 2 : 0);
-
-      const detectionBaseTime = new Date(
-        result.spills?.[0]?.detected_at || result.timestamp || new Date().toISOString()
-      ).getTime();
-
-      const mappedVessels: Vessel[] = allSuspects.map((cand, idx) => {
-        const scorePct =
-          cand.final_score > 1 ? cand.final_score : Math.round(cand.final_score * 100);
-
-        const mmsiStr = String(cand.mmsi);
-        let imoStr = mmsiStr;
-        let flagStr = 'Commercial Registry';
-
-        // Historical benchmark IMO & Flag resolution
-        if (mmsiStr === '356072000' || cand.name?.toUpperCase().includes('WAKASHIO')) {
-          imoStr = '9337119';
-          flagStr = 'Panama [PAN]';
-        } else if (mmsiStr === '241088000' || cand.name?.toUpperCase().includes('MINERVA')) {
-          imoStr = '9310393';
-          flagStr = 'Greece [GRC]';
-        } else if (mmsiStr === '312794000' || cand.name?.toUpperCase().includes('GULFSTREAM')) {
-          imoStr = '7504005';
-          flagStr = 'Tanzania [TZA]';
-        } else if (mmsiStr === '468000101' || cand.name?.toUpperCase().includes('BANIYAS')) {
-          imoStr = '9125437';
-          flagStr = 'Syria [SYR]';
-        } else {
-          // Standard ITU Maritime Identification Digits (MID) resolution
-          const mid = parseInt(mmsiStr.slice(0, 3), 10);
-          if (mid >= 351 && mid <= 357) flagStr = 'Panama [PAN]';
-          else if (mid >= 412 && mid <= 414) flagStr = 'China [CHN]';
-          else if (mid === 419) flagStr = 'India [IND]';
-          else if (mid >= 240 && mid <= 242) flagStr = 'Greece [GRC]';
-          else if (mid === 538) flagStr = 'Marshall Islands [MHL]';
-          else if (mid === 312) flagStr = 'Trinidad & Tobago [TTO]';
-          else if (mid === 468) flagStr = 'Syria [SYR]';
-          else if (mid === 645) flagStr = 'Mauritius [MUS]';
-          else if (mid === 228) flagStr = 'France [FRA]';
-          else if (mid === 273) flagStr = 'Russia [RUS]';
-          else if (mid >= 366 && mid <= 369) flagStr = 'United States [USA]';
-          else if (mid >= 636 && mid <= 637) flagStr = 'Liberia [LBR]';
-          else if (mid >= 563 && mid <= 566) flagStr = 'Singapore [SGP]';
-        }
-
-        // Chronological event timeline leading up to detection
-        const hoursBack = cand.hours_before_detection || 3.0;
-        const anomalyEvents = (cand.flags || []).map((flag, fIdx) => {
-          const offsetMinutes = Math.round(Math.max(15, (hoursBack - fIdx * 0.7) * 60));
-          const eventTimeIso = new Date(detectionBaseTime - offsetMinutes * 60 * 1000).toISOString();
-          return {
-            timestampUtc: eventTimeIso,
-            label: 'FORENSIC FLAG',
-            description: flag,
-            severity: 'WARNING' as const,
-          };
-        });
-
-        return {
-          id: `v-${cand.mmsi}`,
-          name: cand.name || `VESSEL ${cand.mmsi}`,
-          imo: imoStr,
-          type: (cand.flags && cand.flags[0]) || 'Commercial Vessel',
-          flag: flagStr,
-          speedKn: cand.has_speed_anomaly ? 3.2 : 11.4,
-          headingDeg: 240,
-          draftM: 12.0,
-          currentLocation: { lat: centerLat + idx * 0.015, lng: centerLon + idx * 0.015 },
-          isSuspect: true,
-          rank: idx + 1,
-          attribution: {
-            attributionScorePct: scorePct,
-            distanceNm: Number((cand.distance_km * 0.539957).toFixed(1)),
-            timeDifferenceMinutes: Math.round(cand.hours_before_detection * 60),
-            trajectoryMatchPct: Math.round(cand.proximity_score),
-            behaviorAnomaly: cand.has_suspicious_gap ? 'HIGH' : 'LOW',
-            risk: scorePct >= 80 ? 'CRITICAL' : scorePct >= 50 ? 'HIGH' : 'MEDIUM',
-            breakdown: {
-              spatialProximity: { score: Math.round(cand.proximity_score), max: 100 },
-              temporalCorrelation: { score: Math.round(cand.time_score), max: 100 },
-              trajectoryMatch: { score: Math.round(cand.proximity_score), max: 100 },
-              behaviorAnomaly: { score: cand.has_suspicious_gap ? 90 : 20, max: 100 },
-            },
-            correlation: {
-              spatialPct: Math.round(cand.proximity_score),
-              temporalPct: Math.round(cand.time_score),
-              trajectoryPct: Math.round(cand.proximity_score),
-              behaviorPct: cand.has_suspicious_gap ? 90 : 20,
-              overallPct: scorePct,
-            },
-          },
-          anomalyEvents,
-        };
-      });
-      setVessels(mappedVessels);
-    }
+    const firstInvestigation = result.spill_investigations?.[0];
+    setSurveillanceResult({
+      ...result,
+      suspects: firstInvestigation?.suspects ?? result.suspects ?? [],
+      max_suspect: toScanMaxSuspect(firstInvestigation?.suspects?.[0]) ?? result.max_suspect,
+      ais_status: firstInvestigation?.ais_status,
+      ais_error: firstInvestigation?.ais_error,
+    });
+    setSpill(null);
+    setSelectedSpillId(persistedSpillForDetection(result, 0));
   }, []);
+
+  const handleSelectScanSpill = useCallback((index: number) => {
+    setSelectedScanSpillIndex(index);
+    const investigation = surveillanceResult?.spill_investigations?.find(
+      (item) => item.detection_index === index,
+    );
+    setSelectedSpillId(persistedSpillForDetection(surveillanceResult, index));
+    setSelectedFrameIndex(0);
+    setReconstruction(null);
+    setSpill(null);
+    setVessels([]);
+    setSelectedVesselId(null);
+    if (surveillanceResult) {
+      setSurveillanceResult({
+        ...surveillanceResult,
+        suspects: investigation?.suspects ?? [],
+        max_suspect: toScanMaxSuspect(investigation?.suspects?.[0]),
+        ais_status: investigation?.ais_status,
+        ais_error: investigation?.ais_error,
+      });
+    }
+  }, [surveillanceResult]);
 
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
   const isLight = themeMode === 'light';
@@ -470,26 +421,40 @@ export default function App() {
             isLight={isLight}
           />
 
-          <main className="min-w-0 flex-1">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             {loading ? (
               <LoadingScreen isLight={isLight} />
             ) : (
-              <SectionTransition sectionKey={activeSection}>
-                <MapView
-                  spill={spill}
-                  vessels={vessels}
-                  tracks={tracks}
-                  satellite={satellite}
-                  selectedVesselId={selectedVesselId}
-                  onSelectVessel={handleSelectVessel}
-                  centerTargetVessel={centerTargetVessel}
-                  activeSection={activeSection}
-                  onEmptyMapClick={handleDeselect}
-                  isLight={isLight}
-                  onSelectHistoricalSpill={handleSelectHistoricalSpill}
-                  onNavigateSection={setActiveSection}
-                  onSurveillanceResult={handleSurveillanceResult}
-                />
+              <SectionTransition sectionKey={activeSection} className="min-h-0 flex-1">
+                <div className="flex h-full min-h-0 flex-col">
+                  <MapView
+                    spill={spill}
+                    vessels={vessels}
+                    tracks={tracks}
+                    satellite={satellite}
+                    selectedVesselId={selectedVesselId}
+                    onSelectVessel={handleSelectVessel}
+                    centerTargetVessel={centerTargetVessel}
+                    activeSection={activeSection}
+                    onEmptyMapClick={handleDeselect}
+                    isLight={isLight}
+                    onSelectHistoricalSpill={handleSelectHistoricalSpill}
+                    onNavigateSection={setActiveSection}
+                    onSurveillanceResult={handleSurveillanceResult}
+                    onSelectScanSpill={handleSelectScanSpill}
+                    reconstructionFrames={reconstruction?.frames ?? []}
+                    selectedFrameIndex={selectedFrameIndex}
+                    hasDatabaseSpillId={selectedSpillId !== null}
+                  />
+                  <BottomTimeline
+                    frames={reconstruction?.frames ?? []}
+                    selectedIndex={selectedFrameIndex}
+                    onIndexChange={handleFrameIndexChange}
+                    loading={reconstructionLoading}
+                    error={reconstructionError}
+                    isLight={isLight}
+                  />
+                </div>
               </SectionTransition>
             )}
           </main>

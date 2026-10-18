@@ -1,12 +1,16 @@
-import math
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import SpillInput
 from app.queries.spills import insert_spill, get_all_spills, get_spill_by_id
+from app.queries.reconstructions import get_latest_reconstruction
 from app.queries.suspects import AISCoverageError, get_suspects
-from app.services.drift import process_new_spill, estimate_spill_area_km2
+from app.services.drift import (
+    DRIFT_MODEL_LIMITATIONS,
+    process_new_spill,
+    estimate_spill_area_km2,
+)
 
 router = APIRouter(tags=["spills"])
 
@@ -51,7 +55,8 @@ def spill_detail(
         suspect_rows = get_suspects(spill_id, origin_lat=origin_lat, origin_lon=origin_lon)
     except AISCoverageError as exc:
         coverage_error = str(exc)
-    except Exception:
+    except Exception as exc:
+        coverage_error = f"AIS candidate query failed: {exc}"
         suspect_rows = []
 
     # Construct frontend-compatible coordinates ring
@@ -74,7 +79,7 @@ def spill_detail(
         elif data.get("origin_lat") is not None and data.get("origin_lon") is not None:
             origin_coords = {"lat": float(data.get("origin_lat")), "lng": float(data.get("origin_lon"))}
         else:
-            origin_coords = {"lat": centroid_lat, "lng": centroid_lon}
+            origin_coords = None
 
     detected_at_dt = data.get("detected_at")
     if isinstance(detected_at_dt, datetime):
@@ -83,40 +88,37 @@ def spill_detail(
         if isinstance(estimated_discharge, datetime):
             origin_iso = estimated_discharge.isoformat()
         else:
-            hours_drift = float(data.get("drift_hours_assumed") or 6.0)
-            origin_dt = detected_at_dt - timedelta(hours=hours_drift)
-            origin_iso = origin_dt.isoformat()
+            origin_iso = None
     else:
         detected_iso = str(detected_at_dt or "")
-        origin_iso = detected_iso
+        origin_iso = None
 
-    # Backtrack trajectory nodes
-    backtrack = [
-        {"label": f"T-{int(data.get('drift_hours_assumed') or 6)}h", "location": origin_coords, "timestampUtc": origin_iso},
-        {"label": "NOW", "location": {"lat": centroid_lat, "lng": centroid_lon}, "timestampUtc": detected_iso, "isCurrent": True},
-    ]
-
-    # Forecast trajectory nodes (approx 1 deg lat ~ 111 km, lon ~ 111 * cos(lat))
-    drift_speed = float(data.get("combined_drift_speed_kmh") or 1.0)
-    drift_dir = float(data.get("combined_drift_direction_deg") or 0.0)
-    rad = math.radians(drift_dir)
-    cos_lat = max(math.cos(math.radians(centroid_lat)), 0.0001)
-    f4_km = drift_speed * 4.0
-    f4_lat = centroid_lat + (f4_km * math.cos(rad) / 111.0)
-    f4_lng = centroid_lon + (f4_km * math.sin(rad) / (111.0 * cos_lat))
-
-    forecast = [
-        {"label": "NOW", "location": {"lat": centroid_lat, "lng": centroid_lon}, "timestampUtc": detected_iso, "isCurrent": True},
-        {"label": "T+4h", "location": {"lat": round(f4_lat, 4), "lng": round(f4_lng, 4)}, "timestampUtc": detected_iso},
-    ]
+    backtrack = []
+    if origin_coords:
+        hours_drift = data.get("drift_hours_assumed")
+        backtrack.append({
+            "label": f"T-{int(hours_drift)}h" if hours_drift is not None else "ESTIMATED ORIGIN",
+            "location": origin_coords,
+            "timestampUtc": origin_iso or "",
+        })
+    backtrack.append({
+        "label": "NOW",
+        "location": {"lat": centroid_lat, "lng": centroid_lon},
+        "timestampUtc": detected_iso,
+        "isCurrent": True,
+    })
 
     # Frontend-compatible 'spill' payload
     spill_obj = {
         "id": f"SPILL-{spill_id:04d}",
         "status": "ACTIVE_INVESTIGATION",
-        "detectionConfidencePct": 95.0,
+        "detectionConfidencePct": None,
         "estimatedAreaKm2": float(data.get("area_km2") or 0.0),
-        "estimatedAgeHours": float(data.get("drift_hours_assumed") or 6.0),
+        "estimatedAgeHours": (
+            float(data["drift_hours_assumed"])
+            if data.get("drift_hours_assumed") is not None
+            else None
+        ),
         "detectionSource": "Copernicus Sentinel-1 SAR",
         "observedAtUtc": detected_iso,
         "centroid": {"lat": centroid_lat, "lng": centroid_lon},
@@ -124,24 +126,50 @@ def spill_detail(
         "origin": {
             "location": origin_coords,
             "estimatedAtUtc": origin_iso,
-            "confidencePct": 88.5,
+            "confidencePct": None,
+            "uncertainty": {
+                "status": "not_quantified",
+                "probabilityCalibrated": False,
+                "positionBoundsKm": None,
+                "limitations": [
+                    "The stored estimate has no calibrated position-uncertainty model.",
+                    "Use the reconstruction endpoint for saved frame-level input quality and provenance.",
+                    *DRIFT_MODEL_LIMITATIONS,
+                ],
+            },
         },
         "drift": {
             "backtrack": backtrack,
-            "forecast": forecast,
+            "forecast": [],
         },
     }
 
-    # Oceanographic condition payload
-    wind_spd_kmh = float(data.get("wind_speed_kmh") or 15.0)
-    curr_spd_kmh = float(data.get("current_speed_kmh") or 1.5)
+    # Leave unavailable environmental inputs empty rather than filling defaults.
+    wind_spd_kmh = data.get("wind_speed_kmh")
+    current_spd_kmh = data.get("current_speed_kmh")
     ocean_obj = {
-        "windDirectionDeg": float(data.get("wind_direction_deg") or 0.0),
-        "windSpeedKn": round(wind_spd_kmh / 1.852, 1),
-        "currentDirectionDeg": float(data.get("current_direction_deg") or 0.0),
-        "currentSpeedKn": round(curr_spd_kmh / 1.852, 1),
-        "seaStateM": 1.5,
-        "temperatureC": 26.0,
+        "windDirectionDeg": (
+            float(data["wind_direction_deg"])
+            if data.get("wind_direction_deg") is not None
+            else None
+        ),
+        "windSpeedKn": (
+            round(float(wind_spd_kmh) / 1.852, 1)
+            if wind_spd_kmh is not None
+            else None
+        ),
+        "currentDirectionDeg": (
+            float(data["current_direction_deg"])
+            if data.get("current_direction_deg") is not None
+            else None
+        ),
+        "currentSpeedKn": (
+            round(float(current_spd_kmh) / 1.852, 1)
+            if current_spd_kmh is not None
+            else None
+        ),
+        "seaStateM": None,
+        "temperatureC": None,
     }
 
     return {
@@ -149,10 +177,38 @@ def spill_detail(
         "spill": spill_obj,
         "ocean": ocean_obj,
         "suspects": suspect_rows,
-        "coverage_status": "insufficient_ais_coverage" if coverage_error else "ok",
+        "coverage_status": (
+            "unavailable" if coverage_error and "failed" in coverage_error.lower()
+            else "insufficient_ais_coverage" if coverage_error
+            else "available" if suspect_rows
+            else "no_candidates"
+        ),
         "coverage_error": coverage_error,
         "raw": data,
     }
+
+
+@router.get("/spills/{spill_id}/reconstruction")
+def spill_reconstruction(spill_id: int):
+    """Returns the latest persisted drift reconstruction and its hourly frames."""
+    try:
+        if not get_spill_by_id(spill_id):
+            raise HTTPException(status_code=404, detail=f"Spill {spill_id} not found")
+        reconstruction = get_latest_reconstruction(spill_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch reconstruction for spill {spill_id}: {e}",
+        ) from e
+
+    if reconstruction is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No persisted reconstruction found for spill {spill_id}",
+        )
+    return reconstruction
 
 
 @router.post("/spills")

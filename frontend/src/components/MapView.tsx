@@ -6,10 +6,8 @@ import SpillLayer from './SpillLayer';
 import ShipTrackLayer from './ShipTrackLayer';
 import SurveillancePanel from './SurveillancePanel';
 import HistoricalSpillsPanel from './HistoricalSpillsPanel';
-import type { Spill, Vessel, VesselTrack, SatelliteObservation, SurveillanceScanResult, HistoricalSpillDetail, HistoricalWeather } from '../types';
+import type { Spill, Vessel, VesselTrack, SatelliteObservation, SurveillanceScanResult, HistoricalSpillDetail, ReconstructionFrame } from '../types';
 import { soundEngine } from '../utils/soundEngine';
-import { calculateReverseDrift, type ReverseDriftResult } from '../utils/driftEngine';
-import { getHistoricalWeather } from '../api/client';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 const CARTO_BASEMAP_KEY = import.meta.env.VITE_CARTO_BASEMAP_KEY as string | undefined;
@@ -130,6 +128,58 @@ function CenterOnVessel({ vessel }: { vessel: Vessel | null }) {
   return null;
 }
 
+function ReconstructionLayer({
+  frames,
+  selectedIndex,
+  visible,
+}: {
+  frames: ReconstructionFrame[];
+  selectedIndex: number;
+  visible: boolean;
+}) {
+  if (!visible || frames.length === 0) return null;
+
+  const activeIndex = Math.max(0, Math.min(selectedIndex, frames.length - 1));
+  const activeFrame = frames[activeIndex];
+  const path = frames
+    .slice(0, activeIndex + 1)
+    .map((frame) => [frame.location.lat, frame.location.lng] as [number, number]);
+
+  return (
+    <>
+      {path.length > 1 && (
+        <RLPolyline
+          positions={path}
+          pathOptions={{ color: '#FF6600', weight: 3, opacity: 0.85, dashArray: '5 5' }}
+        />
+      )}
+      <RLCircleMarker
+        center={[activeFrame.location.lat, activeFrame.location.lng]}
+        radius={8}
+        pathOptions={{
+          color: '#FFFFFF',
+          weight: 2,
+          fillColor: '#FF6600',
+          fillOpacity: 1,
+        }}
+      >
+        <RLTooltip direction="top" permanent>
+          <div className="font-mono text-[10px] leading-relaxed">
+            <div className="font-bold text-[#FF6600]">RECONSTRUCTED POSITION · {activeFrame.label}</div>
+            <div>{new Date(activeFrame.timestampUtc).toISOString()}</div>
+            <div>
+              {activeFrame.location.lat.toFixed(5)}°, {activeFrame.location.lng.toFixed(5)}°
+            </div>
+            <div className="text-[#8E95A5]">
+              Position estimate only; no coastline clipping (path may cross land) or slick-area, breakup, and emulsification model.
+            </div>
+          </div>
+        </RLTooltip>
+      </RLCircleMarker>
+    </>
+  );
+}
+
 /**
  * Interactive Map Drawing Handler:
  * Allows users to drag and draw a rectangular bounding box directly on Leaflet.
@@ -235,6 +285,10 @@ interface MapViewProps {
   onSelectHistoricalSpill?: (detail: HistoricalSpillDetail) => void;
   onNavigateSection?: (section: string) => void;
   onSurveillanceResult?: (result: SurveillanceScanResult | null) => void;
+  onSelectScanSpill?: (index: number) => void;
+  reconstructionFrames: ReconstructionFrame[];
+  selectedFrameIndex: number;
+  hasDatabaseSpillId: boolean;
 }
 
 export default function MapView({
@@ -251,6 +305,10 @@ export default function MapView({
   onSelectHistoricalSpill,
   onNavigateSection,
   onSurveillanceResult,
+  onSelectScanSpill,
+  reconstructionFrames,
+  selectedFrameIndex,
+  hasDatabaseSpillId,
 }: MapViewProps) {
   const [toggles, setToggles] = useState<LayerToggles>({
     spill: true,
@@ -261,60 +319,6 @@ export default function MapView({
   const [tileError, setTileError] = useState(false);
   const [latestScan, setLatestScan] = useState<SurveillanceScanResult | null>(null);
   const [selectedSpillIdx, setSelectedSpillIdx] = useState<number>(0);
-  const [slickWeather, setSlickWeather] = useState<HistoricalWeather | null>(null);
-  const [slickDrift, setSlickDrift] = useState<ReverseDriftResult | null>(null);
-
-  // Automated Weather Fetch & Reverse-Drift Calculation for the Active Surveillance Slick
-  useEffect(() => {
-    if (!latestScan?.spills || latestScan.spills.length === 0) {
-      setSlickWeather(null);
-      setSlickDrift(null);
-      return;
-    }
-
-    const safeIdx = Math.max(0, Math.min(selectedSpillIdx, latestScan.spills.length - 1));
-    const activeSlick = latestScan.spills[safeIdx] || latestScan.spills[0];
-    if (!activeSlick) return;
-
-    let cancelled = false;
-    async function updateDrift() {
-      try {
-        const obsDate = activeSlick.detected_at
-          ? activeSlick.detected_at.slice(0, 10)
-          : latestScan?.timestamp
-          ? latestScan.timestamp.slice(0, 10)
-          : undefined;
-
-        const weather = await getHistoricalWeather(
-          activeSlick.centroid_lat,
-          activeSlick.centroid_lon,
-          obsDate
-        );
-        if (cancelled) return;
-        setSlickWeather(weather);
-
-        const drift = calculateReverseDrift({
-          centroid: { lat: activeSlick.centroid_lat, lng: activeSlick.centroid_lon },
-          observedAtUtc: activeSlick.detected_at || latestScan?.timestamp || new Date().toISOString(),
-          windSpeedKmh: weather.wind_speed_kmh,
-          windDirectionDeg: weather.wind_direction_deg,
-          currentSpeedKmh: weather.current_speed_kmh,
-          currentDirectionDeg: weather.current_direction_deg,
-          driftHours: 6,
-        });
-
-        if (cancelled) return;
-        setSlickDrift(drift);
-      } catch (err) {
-        console.warn('Live reverse-drift calculation error:', err);
-      }
-    }
-
-    updateDrift();
-    return () => {
-      cancelled = true;
-    };
-  }, [latestScan, selectedSpillIdx]);
   const [targetAoi, setTargetAoi] = useState<{
     bbox: [number, number, number, number];
     label: string;
@@ -368,7 +372,7 @@ export default function MapView({
   };
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative min-h-0 min-w-0 flex-1 w-full">
       <MapContainer
         center={[spill?.centroid.lat ?? 18.9, spill?.centroid.lng ?? 71.5]}
         zoom={10}
@@ -407,11 +411,18 @@ export default function MapView({
               spill={spill}
               satellite={satellite}
               showSpill={toggles.spill}
-              showDrift={toggles.drift}
+              showDrift={toggles.drift && !hasDatabaseSpillId && reconstructionFrames.length === 0}
               showForecast={false}
               showSatelliteFootprint={toggles.satellite}
             />
           </>
+        )}
+        {spill && (
+          <ReconstructionLayer
+            frames={reconstructionFrames}
+            selectedIndex={selectedFrameIndex}
+            visible={toggles.drift}
+          />
         )}
 
         {(activeSection === 'Live Surveillance' || activeSection === 'AIS Traffic') && <FitToScan scan={latestScan} />}
@@ -477,6 +488,7 @@ export default function MapView({
                 click: () => {
                   soundEngine.playBubbleHover();
                   setSelectedSpillIdx(idx);
+                  onSelectScanSpill?.(idx);
                 },
               }}
               pathOptions={{
@@ -496,53 +508,13 @@ export default function MapView({
                     Area: <span className="text-red-400 font-bold">{detectedSpill.area_km2.toFixed(2)} km²</span>
                   </div>
                   <div className="text-[9px] text-white font-normal">
-                    Confidence: <span className="text-[#FF6600] font-bold">{(detectedSpill.confidence * 100).toFixed(1)}%</span>
+                    Detector score: <span className="text-[#FF6600] font-bold">{detectedSpill.confidence.toFixed(3)}</span>
                   </div>
                 </div>
               </RLTooltip>
             </RLPolygon>
           );
         })}
-
-        {/* Live Surveillance: Reverse-Drift Backtrack Trajectory (controlled by DRIFT toggle) */}
-        {toggles.drift && slickDrift && (
-          <>
-            <RLPolyline
-              positions={slickDrift.backtrack.map((node) => [node.location.lat, node.location.lng])}
-              pathOptions={{
-                color: '#FF6600',
-                weight: 2.5,
-                dashArray: '6 6',
-                opacity: 0.9,
-              }}
-            />
-            {/* Estimated discharge origin marker (T-6h) */}
-            <RLCircleMarker
-              center={[slickDrift.origin.lat, slickDrift.origin.lng]}
-              radius={7}
-              pathOptions={{
-                color: '#FF6600',
-                fillColor: '#FF6600',
-                fillOpacity: 0.9,
-                weight: 2,
-              }}
-            >
-              <RLTooltip direction="top" permanent>
-                <div className="font-mono text-[9px] text-[#FF6600] font-bold p-0.5 leading-tight">
-                  📍 ESTIMATED ORIGIN (T-{slickDrift.driftHours}h)
-                  <div className="text-[8px] text-white font-normal">
-                    {slickDrift.origin.lat.toFixed(4)}°, {slickDrift.origin.lng.toFixed(4)}°
-                  </div>
-                  <div className="text-[7.5px] text-[#8E95A5]">
-                    Backtrack: {slickDrift.totalDriftDistanceKm} km upstream
-                  </div>
-                </div>
-              </RLTooltip>
-            </RLCircleMarker>
-          </>
-        )}
-
-
 
         {/* Scanned zone bounding box (controlled by FOOTPRINT toggle) */}
         {toggles.satellite && latestScan && (
@@ -564,43 +536,6 @@ export default function MapView({
           />
         )}
 
-        {/* Scanned zone top AIS suspect vessel marker */}
-        {toggles.ais && latestScan?.max_suspect && (latestScan?.spills?.[selectedSpillIdx] || latestScan?.spills?.[0]) && (() => {
-          const s = latestScan.spills[selectedSpillIdx] || latestScan.spills[0];
-          const offset = Math.max(0.008, (latestScan.max_suspect.distance_km || 1.0) / 111.0);
-          const vLat = s.centroid_lat + offset * 0.7;
-          const vLon = s.centroid_lon + offset * 0.7;
-          const isMatch = latestScan.ground_truth_comparison?.is_match;
-
-          return (
-            <RLCircleMarker
-              center={[vLat, vLon]}
-              radius={9}
-              pathOptions={{
-                color: isMatch ? '#10B981' : '#EF4444',
-                fillColor: isMatch ? '#10B981' : '#EF4444',
-                fillOpacity: 0.85,
-                weight: 2,
-              }}
-            >
-              <RLTooltip direction="top" permanent>
-                <div className="font-mono text-[9px] p-0.5 leading-tight">
-                  <div className="font-bold flex items-center gap-1 text-white">
-                    🚢 {latestScan.max_suspect.name}
-                  </div>
-                  <div className="text-[8px] text-[#8E95A5]">
-                    MMSI: {latestScan.max_suspect.mmsi} • {latestScan.max_suspect.probability_pct.toFixed(1)}% Max Prob
-                  </div>
-                  {isMatch && (
-                    <div className="text-[8px] text-emerald-400 font-bold mt-0.5">
-                      ★ Confirmed Ground Truth Match
-                    </div>
-                  )}
-                </div>
-              </RLTooltip>
-            </RLCircleMarker>
-          );
-        })()}
       </MapContainer>
 
       {/* Layer toggle control */}
@@ -643,6 +578,7 @@ export default function MapView({
             onScanComplete={(result) => {
               setLatestScan(result);
               setSelectedSpillIdx(0);
+              onSelectScanSpill?.(0);
               onSurveillanceResult?.(result);
             }}
             customBbox={customBbox}
@@ -652,9 +588,10 @@ export default function MapView({
             onOpenHistory={() => onNavigateSection?.('Spill Analysis')}
             onTargetAoiChange={handleTargetAoiChange}
             selectedSpillIdx={selectedSpillIdx}
-            onSelectSpillIdx={(idx) => setSelectedSpillIdx(idx)}
-            slickWeather={slickWeather}
-            slickDrift={slickDrift}
+            onSelectSpillIdx={(idx) => {
+              setSelectedSpillIdx(idx);
+              onSelectScanSpill?.(idx);
+            }}
           />
         </div>
       )}

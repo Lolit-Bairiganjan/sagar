@@ -22,12 +22,9 @@ import {
   ShieldAlert,
   Radio,
   Droplets,
-  Compass,
-  Wind,
 } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
-import type { SurveillanceScanResult, SurveillanceScanParams, HistoricalWeather } from '../types';
-import type { ReverseDriftResult } from '../utils/driftEngine';
+import type { SurveillanceScanResult, SurveillanceScanParams } from '../types';
 import { triggerSurveillanceScan } from '../api/client';
 
 // ---------------------------------------------------------------------------
@@ -311,8 +308,6 @@ interface SurveillancePanelProps {
   onTargetAoiChange?: (bbox: [number, number, number, number], label: string) => void;
   selectedSpillIdx?: number;
   onSelectSpillIdx?: (idx: number) => void;
-  slickWeather?: HistoricalWeather | null;
-  slickDrift?: ReverseDriftResult | null;
 }
 
 export default function SurveillancePanel({
@@ -326,8 +321,6 @@ export default function SurveillancePanel({
   onTargetAoiChange,
   selectedSpillIdx = 0,
   onSelectSpillIdx,
-  slickWeather = null,
-  slickDrift = null,
 }: SurveillancePanelProps) {
   const [mode, setMode] = useState<'preset' | 'custom'>('preset');
   const [selectedZoneKey, setSelectedZoneKey] = useState<string>('mumbai_high');
@@ -354,6 +347,10 @@ export default function SurveillancePanel({
     INDIAN_OCEAN_ZONES.find((z) => z.key === selectedZoneKey) || INDIAN_OCEAN_ZONES[0];
   const activeKey = mode === 'preset' ? selectedZoneKey : 'custom';
   const activeResult = results[activeKey];
+  const selectedInvestigation = activeResult?.spill_investigations?.find(
+    (item) => item.detection_index === selectedSpillIdx,
+  );
+  const selectedCandidate = selectedInvestigation?.suspects[0];
 
   // Calculate bounding box area and enforce physical limits (Cap at 2,500 km²)
   const numericBbox = useMemo<[number, number, number, number] | null>(() => {
@@ -1101,60 +1098,8 @@ export default function SurveillancePanel({
               </div>
             </div>
 
-            {/* ─── Weather & Reverse-Drift (Leeway) Card ─── */}
-            {slickWeather && (
-              <div
-                className={`border rounded p-2 flex flex-col gap-1.5 font-mono text-[9px] ${
-                  isLight ? 'border-sky-300/80 bg-sky-50/70 text-sky-950' : 'border-sky-500/30 bg-sky-950/20 text-sky-200'
-                }`}
-              >
-                <div className="flex items-center justify-between border-b pb-1 border-white/10">
-                  <div className="flex items-center gap-1.5">
-                    <Compass size={11} className="text-[#FF6600]" />
-                    <span className="font-bold text-[9px] uppercase tracking-wider text-[#FF6600]">
-                      Weather & Drift Conditions
-                    </span>
-                  </div>
-                  <span className="text-[7.5px] px-1.5 py-0.5 rounded font-bold uppercase bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                    {slickWeather.cached ? 'LOCAL CACHED ARCHIVE' : 'OPEN-METEO VERIFIED'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-1 text-center text-[8px]">
-                  <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                    <span className="text-[7px] text-[#8E95A5] uppercase">Wind (10m)</span>
-                    <span className="font-bold text-sky-400">
-                      {slickWeather.wind_speed_kmh} km/h
-                    </span>
-                    <span className="text-[6.5px] text-[#8E95A5]">Dir: {slickWeather.wind_direction_deg}°</span>
-                  </div>
-                  <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                    <span className="text-[7px] text-[#8E95A5] uppercase">Surface Current</span>
-                    <span className="font-bold text-teal-400">
-                      {slickWeather.current_speed_kmh} km/h
-                    </span>
-                    <span className="text-[6.5px] text-[#8E95A5]">Dir: {slickWeather.current_direction_deg}°</span>
-                  </div>
-                  <div className={`p-1 rounded border flex flex-col items-center ${isLight ? 'bg-black/5 border-black/10' : 'bg-black/30 border-white/5'}`}>
-                    <span className="text-[7px] text-[#8E95A5] uppercase">Sea State</span>
-                    <span className="font-bold text-amber-400">
-                      {slickWeather.wave_height_m}m wave
-                    </span>
-                    <span className="text-[6.5px] text-[#8E95A5]">{slickWeather.sea_temperature_c}°C</span>
-                  </div>
-                </div>
-
-                {slickDrift && (
-                  <div className="flex items-center justify-between pt-0.5 text-[8px] text-[#8E95A5]">
-                    <span>Net Drift: <strong className={isLight ? 'text-black' : 'text-white'}>{slickDrift.combinedDriftSpeedKmh} km/h</strong> @ {slickDrift.combinedDriftDirectionDeg}°</span>
-                    <span>Backtrack (6h): <strong className="text-[#FF6600]">{slickDrift.totalDriftDistanceKm} km</strong></span>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* ─── AIS Suspect Attribution Summary (Detailed in Right Suspect Dock) ─── */}
-            {hasDetections && activeResult && (activeResult.max_suspect || activeResult.ground_truth_comparison?.has_ground_truth || (activeResult.suspects && activeResult.suspects.length > 0)) && (
+            {hasDetections && activeResult && selectedCandidate && (
               <div
                 className={`border rounded p-2 flex items-center justify-between font-mono text-[9px] ${
                   isLight
@@ -1166,13 +1111,11 @@ export default function SurveillancePanel({
                   <Ship size={12} className="text-[#FF6600] shrink-0" />
                   <div className="truncate">
                     <span className="text-[#FF6600] font-bold uppercase">
-                      {activeResult.max_suspect ? `Suspect: ${activeResult.max_suspect.name}` : 'Suspects Correlated'}
+                      Candidate: {selectedCandidate.name}
                     </span>
-                    {activeResult.max_suspect && (
-                      <span className={`text-[8px] ml-1 ${isLight ? 'text-gray-600' : 'text-[#8E95A5]'}`}>
-                        ({activeResult.max_suspect.probability_pct.toFixed(0)}% match)
-                      </span>
-                    )}
+                    <span className={`text-[8px] ml-1 ${isLight ? 'text-gray-600' : 'text-[#8E95A5]'}`}>
+                      ({selectedCandidate.final_score.toFixed(0)} heuristic score)
+                    </span>
                   </div>
                 </div>
                 <span className="text-[8px] px-1.5 py-0.5 rounded font-bold uppercase bg-[#FF6600] text-black shrink-0">
